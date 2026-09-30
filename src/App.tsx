@@ -12,7 +12,7 @@ import About from "./pages/About/About";
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/Nesta">
       <Routes>
         <Route element={<MainLayout />}>
           <Route path="/" element={<Home />} />
