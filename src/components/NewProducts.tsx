@@ -17,7 +17,7 @@ function NewProducts() {
           <article className="group">
             <div className="aspect-square overflow-hidden bg-[#eeeae5]">
               <img
-                src={mainProduct.images}
+                src={mainProduct.images[0]}
                 alt={mainProduct.name}
                 className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
               />

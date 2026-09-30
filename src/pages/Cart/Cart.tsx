@@ -27,7 +27,7 @@ function Cart() {
                   className="flex gap-4 border-b border-[#ddd5cd] py-5"
                 >
                   <img
-                    src={product.image}
+                    src={product.images[0]}
                     alt={product.name}
                     className="h-28 w-28 object-cover"
                   />
