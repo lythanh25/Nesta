@@ -1,365 +1,497 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import searchIcon from "../../assets/search.svg";
-import shoppingCart from "../../assets/shopping-cart.svg";
-import userAlt from "../../assets/user-alt.svg";
+import cartIcon from "../../assets/shopping-cart.svg";
+import userIcon from "../../assets/user-alt.svg";
 
-const productMenu = [
+type Category = {
+  name: string;
+  subcategories?: string[];
+};
+
+const productMenu: Category[] = [
   {
-    name: "Ghế",
+    name: "SOFA",
+    subcategories: ["Sofa đệm", "Gối sofa", "Sofa băng"],
+  },
+  {
+    name: "GHẾ",
     subcategories: [
-      {
-        name: "Ghế thư giãn",
-        category: "Ghế",
-        subcategory: "Ghế thư giãn",
-      },
-      {
-        name: "Ghế ăn",
-        category: "Ghế",
-        subcategory: "Ghế ăn",
-      },
-      {
-        name: "Ghế làm việc",
-        category: "Ghế",
-        subcategory: "Ghế làm việc",
-      },
+      "Ghế ăn",
+      "Ghế ban công",
+      "Ghế cà phê",
+      "Ghế văn phòng",
+      "Ghế bar",
     ],
   },
   {
-    name: "Bàn",
-    subcategories: [
-      {
-        name: "Bàn ăn",
-        category: "Bàn",
-        subcategory: "Bàn ăn",
-      },
-      {
-        name: "Bàn làm việc",
-        category: "Bàn",
-        subcategory: "Bàn làm việc",
-      },
-      {
-        name: "Bàn trà",
-        category: "Bàn",
-        subcategory: "Bàn trà",
-      },
-    ],
+    name: "BÀN",
+    subcategories: ["Bàn ăn", "Bàn ban công", "Bàn cà phê", "Bàn văn phòng"],
   },
   {
-    name: "Giường",
-    subcategories: [
-      {
-        name: "Giường ngủ",
-        category: "Giường",
-        subcategory: "Giường ngủ",
-      },
-      {
-        name: "Giường đôi",
-        category: "Giường",
-        subcategory: "Giường đôi",
-      },
-    ],
+    name: "TỦ",
+    subcategories: ["Tủ tivi", "Tủ trang điểm", "Tủ quần áo"],
   },
   {
-    name: "Tủ",
-    subcategories: [
-      {
-        name: "Tủ quần áo",
-        category: "Tủ",
-        subcategory: "Tủ quần áo",
-      },
-      {
-        name: "Tủ đầu giường",
-        category: "Tủ",
-        subcategory: "Tủ đầu giường",
-      },
-      {
-        name: "Tủ trang trí",
-        category: "Tủ",
-        subcategory: "Tủ trang trí",
-      },
-    ],
+    name: "KỆ",
+    subcategories: ["Kệ sách", "Kệ trang trí"],
+  },
+  {
+    name: "TRANG TRÍ",
+    subcategories: ["Bình hoa", "Khung tranh", "Đồng hồ"],
+  },
+  {
+    name: "GIƯỜNG",
+    subcategories: ["Giường", "Giường cho bé", "Giường cao cấp"],
+  },
+  {
+    name: "ĐÈN",
+    subcategories: ["Đèn ngủ", "Đèn treo tường", "Đèn LED"],
+  },
+  {
+    name: "GƯƠNG",
+    subcategories: ["Gương để bàn", "Gương trang trí"],
   },
 ];
 
 function Header() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const navigate = useNavigate();
 
-  // Mobile
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isProductOpen, setIsProductOpen] = useState(false);
   const [openCategory, setOpenCategory] = useState<string | null>(null);
+  const [searchValue, setSearchValue] = useState("");
 
-  function handleProductToggle() {
-    setIsProductOpen(!isProductOpen);
+  const handleSearch = () => {
+    const keyword = searchValue.trim();
 
-    // Nếu đóng Sản phẩm thì đóng luôn category
-    if (isProductOpen) {
-      setOpenCategory(null);
+    if (!keyword) {
+      navigate("/products");
+      return;
     }
-  }
 
-  function handleCategoryToggle(categoryName: string) {
-    if (openCategory === categoryName) {
-      setOpenCategory(null);
-    } else {
-      setOpenCategory(categoryName);
+    navigate(`/products?search=${encodeURIComponent(keyword)}`);
+    setIsMenuOpen(false);
+  };
+
+  const handleSearchKeyDown = (
+    event: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
+    if (event.key === "Enter") {
+      handleSearch();
     }
-  }
+  };
 
-  function closeMobileMenu() {
+  const handleCategoryToggle = (categoryName: string) => {
+    setOpenCategory((current) =>
+      current === categoryName ? null : categoryName,
+    );
+  };
+
+  const closeMobileMenu = () => {
     setIsMenuOpen(false);
     setIsProductOpen(false);
     setOpenCategory(null);
-  }
+  };
 
   return (
-    <header className="relative bg-[#3B2F25] text-white">
-      {/* =================================================
-          HEADER BAR
-      ================================================= */}
-
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4">
-        {/* LOGO */}
-
-        <Link to="/" className="text-lg font-semibold tracking-wide">
+    <header className="relative z-50 bg-[#3B2F25] text-white">
+      {/* =========================================================
+          DESKTOP HEADER
+      ========================================================== */}
+      <div className="mx-auto hidden h-[70px] max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-5 lg:grid">
+        {/* Logo */}
+        <Link
+          to="/"
+          className="justify-self-start shrink-0 font-serif text-xl tracking-wide text-white transition-opacity hover:opacity-80"
+        >
           NESTA.COM
         </Link>
 
-        {/* =================================================
-            DESKTOP NAV
-        ================================================= */}
-
-        <nav className="hidden items-center gap-8 md:flex">
-          <Link to="/" className="text-sm transition hover:opacity-70">
+        {/* Main Navigation */}
+        <nav className="flex h-full items-center gap-8">
+          {/* Trang chủ */}
+          <Link
+            to="/"
+            className="flex h-full items-center text-sm font-medium transition-colors hover:text-white/70"
+          >
             Trang chủ
           </Link>
 
-          {/* PRODUCT MENU */}
-
-          <div className="group relative">
-            <Link
-              to="/products"
-              className="flex items-center gap-1 py-2 text-sm transition hover:opacity-70"
+          {/* Danh mục sản phẩm */}
+          <div
+            className="relative h-full"
+            onMouseEnter={() => setIsProductOpen(true)}
+            onMouseLeave={() => setIsProductOpen(false)}
+          >
+            <button
+              type="button"
+              onClick={() => setIsProductOpen((current) => !current)}
+              className="flex h-full items-center text-sm font-medium transition-colors hover:text-white/70"
             >
-              Sản phẩm
-              <span className="text-xs">▾</span>
-            </Link>
+              Danh mục sản phẩm
+              <svg
+                className={`ml-2 h-3.5 w-3.5 transition-transform ${
+                  isProductOpen ? "rotate-180" : ""
+                }`}
+                viewBox="0 0 20 20"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path
+                  fillRule="evenodd"
+                  d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.51a.75.75 0 01-1.08 0l-4.25-4.51a.75.75 0 01.02-1.06z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </button>
 
-            {/* DESKTOP DROPDOWN */}
-
-            <div className="invisible absolute left-1/2 top-full z-50 w-[700px] -translate-x-1/2 translate-y-2 bg-white text-[#3B2F25] opacity-0 shadow-xl transition-all duration-200 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
-              <div className="grid grid-cols-4 gap-8 p-8">
-                {productMenu.map(function (category) {
-                  return (
+            {/* Mega Menu */}
+            {isProductOpen && (
+              <div className="absolute left-1/2 top-[70px] w-[900px] -translate-x-1/2 border-t border-white/10 bg-white text-[#2D261F] shadow-xl">
+                <div className="grid grid-cols-5 gap-x-10 gap-y-8 p-8">
+                  {productMenu.map((category) => (
                     <div key={category.name}>
                       <Link
                         to={`/products?category=${encodeURIComponent(
                           category.name,
                         )}`}
-                        className="block border-b border-[#e5dfd9] pb-3 text-sm font-semibold"
+                        onClick={() => setIsProductOpen(false)}
+                        className="mb-3 block text-sm font-semibold tracking-wide transition-colors hover:text-[#6E5A47]"
                       >
                         {category.name}
                       </Link>
 
-                      <div className="mt-3 flex flex-col gap-3">
-                        {category.subcategories.map(function (subcategory) {
-                          return (
-                            <Link
-                              key={subcategory.name}
-                              to={`/products?category=${encodeURIComponent(
-                                subcategory.category,
-                              )}&subcategory=${encodeURIComponent(
-                                subcategory.subcategory,
-                              )}`}
-                              className="text-sm text-[#6f6257] transition hover:text-[#3B2F25]"
-                            >
-                              {subcategory.name}
-                            </Link>
-                          );
-                        })}
-                      </div>
+                      {category.subcategories &&
+                        category.subcategories.length > 0 && (
+                          <ul className="space-y-2">
+                            {category.subcategories.map((subcategory) => (
+                              <li key={subcategory}>
+                                <Link
+                                  to={`/products?category=${encodeURIComponent(
+                                    category.name,
+                                  )}&subcategory=${encodeURIComponent(
+                                    subcategory,
+                                  )}`}
+                                  onClick={() => setIsProductOpen(false)}
+                                  className="block text-xs text-[#756D66] transition-colors hover:text-[#2D261F]"
+                                >
+                                  {subcategory}
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                     </div>
-                  );
-                })}
-              </div>
+                  ))}
+                </div>
 
-              <div className="border-t border-[#e5dfd9] px-8 py-4">
-                <Link
-                  to="/products"
-                  className="text-sm font-medium hover:underline"
-                >
-                  Xem tất cả sản phẩm →
-                </Link>
+                {/* View all */}
+                <div className="border-t border-[#E5E0DA] px-8 py-4">
+                  <Link
+                    to="/products"
+                    onClick={() => setIsProductOpen(false)}
+                    className="inline-flex items-center text-sm font-medium transition-colors hover:text-[#6E5A47]"
+                  >
+                    Xem tất cả sản phẩm
+                    <span className="ml-2">→</span>
+                  </Link>
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
-          <Link to="/about" className="text-sm transition hover:opacity-70">
+          {/* Về chúng tôi */}
+          <Link
+            to="/about"
+            className="flex h-full items-center text-sm font-medium transition-colors hover:text-white/70"
+          >
             Về chúng tôi
           </Link>
         </nav>
 
-        {/* =================================================
-            DESKTOP ACTIONS
-        ================================================= */}
-
-        <div className="hidden items-center gap-4 md:flex">
-          <button type="button">
-            <img
-              src={searchIcon}
-              alt="Tìm kiếm"
-              className="h-5 w-5 brightness-0 invert"
+        {/* Right Actions */}
+        <div className="flex items-center justify-self-end gap-4">
+          {/* Search */}
+          <div className="flex h-9 w-[230px] items-center overflow-hidden rounded border border-white/50 bg-white/10">
+            <input
+              type="text"
+              value={searchValue}
+              onChange={(event) => setSearchValue(event.target.value)}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="Tìm kiếm sản phẩm..."
+              className="min-w-0 flex-1 bg-transparent px-3 text-xs text-white outline-none placeholder:text-white/60"
+              aria-label="Tìm kiếm sản phẩm"
             />
-          </button>
 
-          <Link to="/cart">
+            <button
+              type="button"
+              onClick={handleSearch}
+              className="flex h-full w-9 shrink-0 items-center justify-center transition-colors hover:bg-white/10"
+              aria-label="Tìm kiếm"
+            >
+              <img
+                src={searchIcon}
+                alt=""
+                className="h-4 w-4 brightness-0 invert"
+              />
+            </button>
+          </div>
+
+          {/* Cart */}
+          <Link
+            to="/cart"
+            className="flex h-9 w-9 items-center justify-center transition-opacity hover:opacity-70"
+            aria-label="Giỏ hàng"
+          >
             <img
-              src={shoppingCart}
-              alt="Giỏ hàng"
+              src={cartIcon}
+              alt=""
               className="h-5 w-5 brightness-0 invert"
             />
           </Link>
 
-          <Link to="/profile">
+          {/* Account */}
+          <Link
+            to="/profile"
+            className="flex h-9 w-9 items-center justify-center transition-opacity hover:opacity-70"
+            aria-label="Tài khoản"
+          >
             <img
-              src={userAlt}
-              alt="Tài khoản"
+              src={userIcon}
+              alt=""
               className="h-5 w-5 brightness-0 invert"
             />
           </Link>
         </div>
-
-        {/* =================================================
-            MOBILE MENU BUTTON
-        ================================================= */}
-
-        <button
-          type="button"
-          className="text-xl md:hidden"
-          onClick={function () {
-            setIsMenuOpen(!isMenuOpen);
-
-            if (isMenuOpen) {
-              setIsProductOpen(false);
-              setOpenCategory(null);
-            }
-          }}
-          aria-label="Mở menu"
-        >
-          {isMenuOpen ? "✕" : "☰"}
-        </button>
       </div>
 
-      {/* =================================================
+      {/* =========================================================
+          MOBILE HEADER
+      ========================================================== */}
+      <div className="flex h-[70px] items-center px-4 lg:hidden">
+        {/* Hamburger */}
+        <button
+          type="button"
+          onClick={() => setIsMenuOpen((current) => !current)}
+          className="flex h-10 w-10 items-center justify-start"
+          aria-label={isMenuOpen ? "Đóng menu" : "Mở menu"}
+          aria-expanded={isMenuOpen}
+        >
+          {isMenuOpen ? (
+            <svg
+              className="h-6 w-6"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+            >
+              <path strokeLinecap="round" d="M6 6l12 12M18 6L6 18" />
+            </svg>
+          ) : (
+            <svg
+              className="h-6 w-6"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+            >
+              <path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
+          )}
+        </button>
+
+        {/* Logo */}
+        <Link
+          to="/"
+          onClick={closeMobileMenu}
+          className="absolute left-1/2 -translate-x-1/2 font-serif text-lg tracking-wide"
+        >
+          NESTA.COM
+        </Link>
+
+        {/* Mobile Actions */}
+        <div className="ml-auto flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              setIsMenuOpen(true);
+              setIsProductOpen(false);
+            }}
+            className="flex h-10 w-10 items-center justify-center"
+            aria-label="Tìm kiếm"
+          >
+            <img
+              src={searchIcon}
+              alt=""
+              className="h-5 w-5 brightness-0 invert"
+            />
+          </button>
+
+          <Link
+            to="/cart"
+            onClick={closeMobileMenu}
+            className="flex h-10 w-10 items-center justify-center"
+            aria-label="Giỏ hàng"
+          >
+            <img
+              src={cartIcon}
+              alt=""
+              className="h-5 w-5 brightness-0 invert"
+            />
+          </Link>
+        </div>
+      </div>
+
+      {/* =========================================================
           MOBILE MENU
-      ================================================= */}
-
+      ========================================================== */}
       {isMenuOpen && (
-        <div className="border-t border-white/10 px-5 pb-6 md:hidden">
-          <nav className="flex flex-col pt-4">
-            {/* TRANG CHỦ */}
-
-            <Link to="/" onClick={closeMobileMenu} className="py-3 text-base">
-              Trang chủ
-            </Link>
-
-            {/* =================================================
-                SẢN PHẨM
-            ================================================= */}
-
-            <div className="border-t border-white/10">
-              <div className="flex items-center justify-between py-3">
-                {/* Click chữ → toàn bộ sản phẩm */}
-
-                <Link
-                  to="/products"
-                  onClick={closeMobileMenu}
-                  className="text-base"
-                >
-                  Sản phẩm
-                </Link>
-
-                {/* Click mũi tên → mở danh mục */}
+        <div className="absolute left-0 top-[70px] w-full border-t border-white/10 bg-[#3B2F25] lg:hidden">
+          <div className="max-h-[calc(100vh-70px)] overflow-y-auto px-5 pb-8">
+            {/* Search */}
+            <div className="border-b border-white/10 py-5">
+              <div className="flex h-10 overflow-hidden rounded border border-white/40 bg-white/10">
+                <input
+                  type="text"
+                  value={searchValue}
+                  onChange={(event) => setSearchValue(event.target.value)}
+                  onKeyDown={handleSearchKeyDown}
+                  placeholder="Tìm kiếm sản phẩm..."
+                  className="min-w-0 flex-1 bg-transparent px-3 text-sm text-white outline-none placeholder:text-white/60"
+                  aria-label="Tìm kiếm sản phẩm"
+                />
 
                 <button
                   type="button"
-                  onClick={handleProductToggle}
-                  className="flex h-8 w-8 items-center justify-center text-lg"
-                  aria-label="Mở danh mục sản phẩm"
+                  onClick={handleSearch}
+                  className="flex w-11 items-center justify-center"
+                  aria-label="Tìm kiếm"
                 >
-                  {isProductOpen ? "−" : "+"}
+                  <img
+                    src={searchIcon}
+                    alt=""
+                    className="h-4 w-4 brightness-0 invert"
+                  />
                 </button>
               </div>
+            </div>
 
-              {/* =================================================
-                  PRODUCT CATEGORIES
-              ================================================= */}
+            {/* Trang chủ */}
+            <Link
+              to="/"
+              onClick={closeMobileMenu}
+              className="block border-b border-white/10 py-4 text-sm font-medium"
+            >
+              Trang chủ
+            </Link>
+
+            {/* Danh mục */}
+            <div className="border-b border-white/10">
+              <button
+                type="button"
+                onClick={() => setIsProductOpen((current) => !current)}
+                className="flex w-full items-center justify-between py-4 text-left text-sm font-medium"
+              >
+                <span>Danh mục sản phẩm</span>
+
+                <svg
+                  className={`h-4 w-4 transition-transform ${
+                    isProductOpen ? "rotate-180" : ""
+                  }`}
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.51a.75.75 0 01-1.08 0l-4.25-4.51a.75.75 0 01.02-1.06z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
 
               {isProductOpen && (
-                <div className="pb-3 pl-4">
-                  {productMenu.map(function (category) {
-                    const isOpen = openCategory === category.name;
-
-                    return (
-                      <div key={category.name}>
-                        {/* CATEGORY */}
-
-                        <div className="flex items-center justify-between">
-                          <Link
-                            to={`/products?category=${encodeURIComponent(
-                              category.name,
-                            )}`}
-                            onClick={closeMobileMenu}
-                            className="py-2 text-sm font-medium"
-                          >
-                            {category.name}
-                          </Link>
-
+                <div className="pb-3">
+                  {productMenu.map((category) => (
+                    <div
+                      key={category.name}
+                      className="border-t border-white/5"
+                    >
+                      {category.subcategories &&
+                      category.subcategories.length > 0 ? (
+                        <>
                           <button
                             type="button"
-                            onClick={function () {
-                              handleCategoryToggle(category.name);
-                            }}
-                            className="flex h-8 w-8 items-center justify-center text-sm"
-                            aria-label={`Mở ${category.name}`}
+                            onClick={() => handleCategoryToggle(category.name)}
+                            className="flex w-full items-center justify-between py-3 pl-3 text-left text-sm text-white/90"
                           >
-                            {isOpen ? "−" : "+"}
+                            <span>{category.name}</span>
+
+                            <svg
+                              className={`mr-1 h-3.5 w-3.5 transition-transform ${
+                                openCategory === category.name
+                                  ? "rotate-180"
+                                  : ""
+                              }`}
+                              viewBox="0 0 20 20"
+                              fill="currentColor"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25-4.51a.75.75 0 01-1.08 0l-4.25-4.51a.75.75 0 01.02-1.06z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
                           </button>
-                        </div>
 
-                        {/* SUBCATEGORIES */}
+                          {openCategory === category.name && (
+                            <div className="pb-2 pl-6">
+                              <Link
+                                to={`/products?category=${encodeURIComponent(
+                                  category.name,
+                                )}`}
+                                onClick={closeMobileMenu}
+                                className="block py-2 text-xs text-white/60"
+                              >
+                                Tất cả {category.name.toLowerCase()}
+                              </Link>
 
-                        {isOpen && (
-                          <div className="mb-2 ml-4 border-l border-white/20 pl-4">
-                            {category.subcategories.map(function (subcategory) {
-                              return (
+                              {category.subcategories.map((subcategory) => (
                                 <Link
-                                  key={subcategory.name}
+                                  key={subcategory}
                                   to={`/products?category=${encodeURIComponent(
-                                    subcategory.category,
+                                    category.name,
                                   )}&subcategory=${encodeURIComponent(
-                                    subcategory.subcategory,
+                                    subcategory,
                                   )}`}
                                   onClick={closeMobileMenu}
-                                  className="block py-2 text-sm text-white/70 transition hover:text-white"
+                                  className="block py-2 text-xs text-white/60 transition-colors hover:text-white"
                                 >
-                                  {subcategory.name}
+                                  {subcategory}
                                 </Link>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-
-                  {/* ALL PRODUCTS */}
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <Link
+                          to={`/products?category=${encodeURIComponent(
+                            category.name,
+                          )}`}
+                          onClick={closeMobileMenu}
+                          className="block py-3 pl-3 text-sm text-white/90"
+                        >
+                          {category.name}
+                        </Link>
+                      )}
+                    </div>
+                  ))}
 
                   <Link
                     to="/products"
                     onClick={closeMobileMenu}
-                    className="mt-2 block border-t border-white/10 pt-4 text-sm font-medium"
+                    className="mt-2 block px-3 py-3 text-sm font-medium"
                   >
                     Xem tất cả sản phẩm →
                   </Link>
@@ -367,46 +499,29 @@ function Header() {
               )}
             </div>
 
-            {/* VỀ CHÚNG TÔI */}
-
+            {/* Về chúng tôi */}
             <Link
               to="/about"
               onClick={closeMobileMenu}
-              className="border-t border-white/10 py-3 text-base"
+              className="block border-b border-white/10 py-4 text-sm font-medium"
             >
               Về chúng tôi
             </Link>
 
-            {/* =================================================
-                MOBILE ACTIONS
-            ================================================= */}
-
-            <div className="flex gap-5 border-t border-white/10 pt-5">
-              <button type="button">
-                <img
-                  src={searchIcon}
-                  alt="Tìm kiếm"
-                  className="h-5 w-5 brightness-0 invert"
-                />
-              </button>
-
-              <Link to="/cart">
-                <img
-                  src={shoppingCart}
-                  alt="Giỏ hàng"
-                  className="h-5 w-5 brightness-0 invert"
-                />
-              </Link>
-
-              <Link to="/profile">
-                <img
-                  src={userAlt}
-                  alt="Tài khoản"
-                  className="h-5 w-5 brightness-0 invert"
-                />
-              </Link>
-            </div>
-          </nav>
+            {/* Account */}
+            <Link
+              to="/profile"
+              onClick={closeMobileMenu}
+              className="flex items-center gap-3 py-4 text-sm font-medium"
+            >
+              <img
+                src={userIcon}
+                alt=""
+                className="h-5 w-5 brightness-0 invert"
+              />
+              Tài khoản
+            </Link>
+          </div>
         </div>
       )}
     </header>

@@ -1,5 +1,5 @@
 import Hero from "../../components/Hero";
-import FeaturedProducts from "../../components/FeaturedProducts";
+import SpacesSection from "../../components/SpacesSection";
 import NewProducts from "../../components/NewProducts";
 import CollectionSection from "../../components/CollectionSection";
 import AboutSection from "../../components/AboutSection";
@@ -9,7 +9,7 @@ function Home() {
   return (
     <>
       <Hero />
-      <FeaturedProducts />
+      <SpacesSection />
       <NewProducts />
       <CollectionSection />
       <CTA />
