@@ -7,7 +7,7 @@ function MainLayout() {
     <div className="min-h-screen bg-[#f7f5f2]">
       <Header />
 
-      <main>
+      <main className="pt-[70px]">
         <Outlet />
       </main>
 

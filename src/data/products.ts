@@ -46,12 +46,9 @@ export const products: Product[] = [
     price: 5000000,
     category: "Giường",
     subcategory: "Giường ngủ",
-
     images: [bed1Image1, bed1Image2, bed1Image3, bed1Image4],
-
     description:
       "Giường ngủ hiện đại với thiết kế mềm mại, phù hợp cho nhiều không gian phòng ngủ.",
-
     model3D: bed1Model,
   },
 
@@ -61,11 +58,9 @@ export const products: Product[] = [
     price: 9800000,
     category: "Giường",
     subcategory: "Giường ngủ",
-
     images: [
       "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=800&q=80",
     ],
-
     description:
       "Giường ngủ tối giản với thiết kế hiện đại, tạo cảm giác thoải mái cho phòng ngủ.",
   },
@@ -76,11 +71,9 @@ export const products: Product[] = [
     price: 8500000,
     category: "Giường",
     subcategory: "Giường đôi",
-
     images: [
       "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=800&q=80",
     ],
-
     description:
       "Giường gỗ mang lại cảm giác ấm áp và tự nhiên cho không gian nghỉ ngơi.",
   },
@@ -95,11 +88,9 @@ export const products: Product[] = [
     price: 6500000,
     category: "Sofa",
     subcategory: "Sofa phòng khách",
-
     images: [
       "https://images.unsplash.com/photo-1550254478-ead40cc54513?auto=format&fit=crop&w=800&q=80",
     ],
-
     description:
       "Modern Sofa với kiểu dáng hiện đại, phù hợp cho không gian phòng khách rộng.",
   },
@@ -114,11 +105,9 @@ export const products: Product[] = [
     price: 3200000,
     category: "Ghế",
     subcategory: "Ghế thư giãn",
-
     images: [
       "https://images.unsplash.com/photo-1598300042247-d088f8ab3a91?auto=format&fit=crop&w=800&q=80",
     ],
-
     description:
       "Lounge Chair mang đến cảm giác thoải mái và thư giãn với kiểu dáng thanh lịch.",
   },
@@ -129,11 +118,9 @@ export const products: Product[] = [
     price: 2800000,
     category: "Ghế",
     subcategory: "Ghế ăn",
-
     images: [
       "https://images.unsplash.com/photo-1592078615290-033ee584e267?auto=format&fit=crop&w=800&q=80",
     ],
-
     description:
       "Modern Chair phù hợp cho phòng khách, phòng đọc sách hoặc không gian làm việc.",
   },
@@ -148,11 +135,9 @@ export const products: Product[] = [
     price: 3600000,
     category: "Bàn",
     subcategory: "Bàn trà",
-
     images: [
       "https://images.unsplash.com/photo-1533090161767-e6ffed986c88?auto=format&fit=crop&w=800&q=80",
     ],
-
     description: "Bàn trà phong cách Bắc Âu với thiết kế gọn gàng và tinh tế.",
   },
 
@@ -162,11 +147,9 @@ export const products: Product[] = [
     price: 7200000,
     category: "Bàn",
     subcategory: "Bàn ăn",
-
     images: [
       "https://images.unsplash.com/photo-1617104678098-de229db51175?auto=format&fit=crop&w=800&q=80",
     ],
-
     description:
       "Bàn ăn gỗ sồi với thiết kế chắc chắn, phù hợp cho không gian gia đình.",
   },
@@ -181,11 +164,9 @@ export const products: Product[] = [
     price: 11500000,
     category: "Tủ",
     subcategory: "Tủ quần áo",
-
     images: [
       "https://images.unsplash.com/photo-1595428774223-ef52624120d2?auto=format&fit=crop&w=800&q=80",
     ],
-
     description:
       "Tủ quần áo gỗ sồi với nhiều không gian lưu trữ và thiết kế hiện đại.",
   },
@@ -196,11 +177,9 @@ export const products: Product[] = [
     price: 6200000,
     category: "Tủ",
     subcategory: "Tủ trang trí",
-
     images: [
       "https://images.unsplash.com/photo-1558997519-83ea9252edf8?auto=format&fit=crop&w=800&q=80",
     ],
-
     description:
       "Tủ cabinet tối giản phù hợp cho phòng khách, phòng ngủ hoặc phòng làm việc.",
   },
@@ -215,11 +194,9 @@ export const products: Product[] = [
     price: 2400000,
     category: "Đèn",
     subcategory: "Đèn sàn",
-
     images: [
       "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=800&q=80",
     ],
-
     description:
       "Đèn cây phong cách Bắc Âu tạo ánh sáng ấm áp và không gian thư giãn.",
   },
@@ -234,11 +211,9 @@ export const products: Product[] = [
     price: 3200000,
     category: "Kệ",
     subcategory: "Kệ trang trí",
-
     images: [
       "https://images.unsplash.com/photo-1594620302200-9a762244a156?auto=format&fit=crop&w=800&q=80",
     ],
-
     description:
       "Kệ gỗ nhiều tầng phù hợp để sách, đồ trang trí và các vật dụng nhỏ.",
   },
@@ -253,11 +228,9 @@ export const products: Product[] = [
     price: 1800000,
     category: "Gương",
     subcategory: "Gương treo tường",
-
     images: [
       "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=800&q=80",
     ],
-
     description:
       "Gương tròn thiết kế thanh lịch, phù hợp cho phòng ngủ và phòng khách.",
   },
@@ -272,11 +245,9 @@ export const products: Product[] = [
     price: 850000,
     category: "Trang trí",
     subcategory: "Lọ trang trí",
-
     images: [
       "https://images.unsplash.com/photo-1578500494198-246f612d3b3d?auto=format&fit=crop&w=800&q=80",
     ],
-
     description:
       "Lọ trang trí mang phong cách tối giản, phù hợp với nhiều không gian nội thất.",
   },
@@ -287,11 +258,9 @@ export const products: Product[] = [
     price: 1200000,
     category: "Trang trí",
     subcategory: "Cây trang trí",
-
     images: [
       "https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=800&q=80",
     ],
-
     description:
       "Cây trang trí giúp không gian trở nên xanh mát và gần gũi với thiên nhiên.",
   },
@@ -301,7 +270,7 @@ export const products: Product[] = [
 // GET PRODUCT BY ID
 // =====================================================
 
-export function getProductById(id: number) {
+export function getProductById(id: number): Product | undefined {
   return products.find(function (product) {
     return product.id === id;
   });
@@ -311,6 +280,46 @@ export function getProductById(id: number) {
 // HOME PRODUCTS
 // =====================================================
 
-export const featuredProducts = products.slice(0, 4);
+// Sản phẩm nổi bật
+export const featuredProducts: Product[] = [
+  products[0],
+  products[1],
+  products[2],
+  products[3],
+];
 
-export const newProducts = products.slice(4, 8);
+// =====================================================
+// SẢN PHẨM MỚI
+// =====================================================
+//
+// 1 sản phẩm lớn + 4 sản phẩm nhỏ
+//
+// Không dùng slice() ở đây để tránh việc thay đổi
+// thứ tự products làm hỏng layout Home.
+//
+
+export const newProducts: Product[] = [
+  products[3], // Modern Sofa
+  products[4], // Lounge Chair
+  products[5], // Modern Chair
+  products[6], // Nordic Coffee Table
+  products[7], // Oak Dining Table
+];
+
+// =====================================================
+// BỘ SƯU TẬP
+// =====================================================
+//
+// 8 sản phẩm = 4 cột x 2 hàng
+//
+
+export const collectionProducts: Product[] = [
+  products[3],
+  products[4],
+  products[5],
+  products[6],
+  products[7],
+  products[1],
+  products[2],
+  products[8],
+];

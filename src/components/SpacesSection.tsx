@@ -4,6 +4,28 @@ import Bedroom from "../assets/images/spaces/bedroom.jpg";
 import Dining from "../assets/images/spaces/dining-room.jpg";
 import Office from "../assets/images/spaces/office.jpg";
 
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mb-7 flex items-center justify-center gap-3">
+      <span className="h-px w-12 bg-[#aaa19a] sm:w-30" />
+
+      <h2
+        className="
+          text-[18px]
+          font-semibold
+          tracking-wide
+          text-[#2d261f]
+          sm:text-[32px]
+        "
+      >
+        {children}
+      </h2>
+
+      <span className="h-px w-12 bg-[#aaa19a] sm:w-30" />
+    </div>
+  );
+}
+
 const spaces = [
   {
     name: "Phòng khách",
@@ -29,11 +51,9 @@ const spaces = [
 
 function SpacesSection() {
   return (
-    <section className="bg-[#f7f5f2] px-5 py-12 md:py-16">
+    <section className="bg-[#f7f1ed] px-5 py-8 md:py-12">
       <div className="mx-auto max-w-7xl">
-        <h2 className="mb-8 text-center text-xl font-semibold text-[#2d261f]">
-          THEO KHÔNG GIAN
-        </h2>
+        <SectionTitle>THEO KHÔNG GIAN</SectionTitle>
 
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6 ">
           {spaces.map(function (space) {

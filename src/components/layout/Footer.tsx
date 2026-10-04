@@ -1,50 +1,51 @@
+import Telegram from "../../assets/telegram.svg";
+import Instagram from "../../assets/instagram.svg";
+import Facebook from "../../assets/facebook-square.svg";
+import Youtube from "../../assets/youtube.svg";
+
 function Footer() {
   return (
     <footer className="bg-[#15120f] px-5 py-12 text-white">
       <div className="mx-auto max-w-7xl">
         <div className="grid gap-10 md:grid-cols-4">
           <div>
-            <h3 className="text-lg font-semibold tracking-wide">
-              NESTA.COM
-            </h3>
-
-            <p className="mt-4 max-w-xs text-sm leading-6 text-white/60">
-              Nội thất cho một không gian sống tinh tế và phù hợp
-              với phong cách của bạn.
-            </p>
-          </div>
-
-          <div>
-            <h4 className="text-sm font-semibold">
-              KHÁM PHÁ
-            </h4>
+            <h4 className="text-lg font-semibold ">Về công ty</h4>
 
             <div className="mt-4 flex flex-col gap-3 text-sm text-white/60">
-              <a href="/">Trang chủ</a>
-              <a href="/">Sản phẩm</a>
-              <a href="/">Bộ sưu tập</a>
+              <a href="/">Giới thiệu</a>
+              <a href="/">Thông tin báo chí</a>
+              <a href="/">Tuyển dụng</a>
+              <a href="/">Đổi trả hàng</a>
             </div>
           </div>
 
           <div>
-            <h4 className="text-sm font-semibold">
-              HỖ TRỢ
-            </h4>
+            <h4 className="text-lg font-semibold">Chăm sóc khách hàng</h4>
 
             <div className="mt-4 flex flex-col gap-3 text-sm text-white/60">
-              <a href="/">Liên hệ</a>
-              <a href="/">Chính sách</a>
-              <a href="/">Điều khoản</a>
+              <a href="/">Các câu hỏi thường gặp</a>
+              <a href="/">Hướng dẫn mua sắm</a>
+              <a href="/">Thông tin vận chuyển</a>
+              <a href="/">Liên hệ qua email</a>
             </div>
           </div>
 
           <div>
-            <h4 className="text-sm font-semibold">
-              ĐĂNG KÝ NHẬN TIN
-            </h4>
+            <h4 className="text-lg font-semibold">Điều khoản và chính sách</h4>
+
+            <div className="mt-4 flex flex-col gap-3 text-sm text-white/60">
+              <a href="/">Điều khoản sử dụng</a>
+              <a href="/">Điều khoản bán hàng</a>
+              <a href="/">Chính sách bảo mật</a>
+              <a href="/">Thuật ngữ cửa hàng</a>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-lg font-semibold">Đăng kí mới</h4>
 
             <p className="mt-4 text-sm leading-6 text-white/60">
-              Nhận thông tin mới nhất về sản phẩm và bộ sưu tập.
+              Nhận giảm giá 5% khi đăng ký mới!
             </p>
 
             <div className="mt-4 flex">
@@ -60,6 +61,29 @@ function Footer() {
               >
                 Gửi
               </button>
+            </div>
+
+            <div className="flex gap-3 mt-3">
+              <img
+                src={Telegram}
+                alt="telegram"
+                className="cursor-pointer hover:scale-110"
+              />
+              <img
+                src={Instagram}
+                alt="instagram"
+                className="cursor-pointer hover:scale-110"
+              />
+              <img
+                src={Facebook}
+                alt="facebook"
+                className="cursor-pointer hover:scale-110"
+              />
+              <img
+                src={Youtube}
+                alt="youtube"
+                className="cursor-pointer hover:scale-110"
+              />
             </div>
           </div>
         </div>
