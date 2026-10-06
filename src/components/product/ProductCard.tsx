@@ -1,11 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { MouseEvent } from "react";
+
 import type { Product } from "../../data/products";
 import shoppingCart from "../../assets/shopping-cart.svg";
+import {
+  isProductFavorite,
+  toggleProductFavorite,
+} from "../../utils/favorites";
 
 type CartItem = {
   productId: number;
+  size?: string;
   quantity: number;
 };
 
@@ -16,10 +22,55 @@ type ProductCardProps = {
 const CART_STORAGE_KEY = "nesta-cart";
 
 function ProductCard({ product }: ProductCardProps) {
-  const [isFavorite, setIsFavorite] = useState(false);
+  // =====================================================
+  // FAVORITE
+  // =====================================================
+
+  const [isFavorite, setIsFavorite] = useState(function () {
+    return isProductFavorite(product.id);
+  });
+
+  /*
+   * Chỉ SUBSCRIBE vào thay đổi từ bên ngoài.
+   *
+   * Không gọi setState trực tiếp trong thân effect.
+   */
+
+  useEffect(
+    function () {
+      function handleFavoritesUpdated() {
+        setIsFavorite(isProductFavorite(product.id));
+      }
+
+      window.addEventListener("favoritesUpdated", handleFavoritesUpdated);
+
+      return function () {
+        window.removeEventListener("favoritesUpdated", handleFavoritesUpdated);
+      };
+    },
+    [product.id],
+  );
 
   const formattedPrice = new Intl.NumberFormat("vi-VN").format(product.price);
+
   const mainImage = product.images[0];
+
+  // =====================================================
+  // FAVORITE
+  // =====================================================
+
+  function handleToggleFavorite(event: MouseEvent<HTMLButtonElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const nextFavorite = toggleProductFavorite(product.id);
+
+    setIsFavorite(nextFavorite);
+  }
+
+  // =====================================================
+  // ADD TO CART
+  // =====================================================
 
   function addToCart() {
     const savedCart = localStorage.getItem(CART_STORAGE_KEY);
@@ -28,22 +79,44 @@ function ProductCard({ product }: ProductCardProps) {
 
     if (savedCart) {
       try {
-        const parsed = JSON.parse(savedCart);
-        cartItems = Array.isArray(parsed) ? parsed : [];
+        const parsed: unknown = JSON.parse(savedCart);
+
+        if (Array.isArray(parsed)) {
+          cartItems = parsed.filter(function (item): item is CartItem {
+            return (
+              typeof item === "object" &&
+              item !== null &&
+              "productId" in item &&
+              typeof item.productId === "number" &&
+              "quantity" in item &&
+              typeof item.quantity === "number"
+            );
+          });
+        }
       } catch {
         cartItems = [];
       }
     }
 
-    const existingItem = cartItems.find(
-      (item) => item.productId === product.id,
-    );
+    /*
+     * Nếu sản phẩm có nhiều size:
+     * ProductCard dùng size đầu tiên làm mặc định.
+     *
+     * Lưu LABEL của size, không lưu cả object ProductSize.
+     */
+
+    const defaultSize = product.sizes?.[0]?.label;
+
+    const existingItem = cartItems.find(function (item) {
+      return item.productId === product.id && item.size === defaultSize;
+    });
 
     if (existingItem) {
       existingItem.quantity += 1;
     } else {
       cartItems.push({
         productId: product.id,
+        size: defaultSize,
         quantity: 1,
       });
     }
@@ -53,12 +126,9 @@ function ProductCard({ product }: ProductCardProps) {
     window.dispatchEvent(new Event("cartUpdated"));
   }
 
-  function toggleFavorite(event: MouseEvent<HTMLButtonElement>) {
-    event.preventDefault();
-    event.stopPropagation();
-
-    setIsFavorite((current) => !current);
-  }
+  // =====================================================
+  // RENDER
+  // =====================================================
 
   return (
     <article
@@ -75,9 +145,10 @@ function ProductCard({ product }: ProductCardProps) {
         bg-white
       "
     >
-      {/* =========================================
+      {/* =================================================
           IMAGE
-      ========================================== */}
+      ================================================== */}
+
       <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
         <Link to={`/products/${product.id}`} className="block h-full w-full">
           <img
@@ -97,10 +168,12 @@ function ProductCard({ product }: ProductCardProps) {
         </Link>
 
         {/* FAVORITE */}
+
         <button
           type="button"
           aria-label={isFavorite ? "Bỏ yêu thích" : "Thêm vào yêu thích"}
-          onClick={toggleFavorite}
+          aria-pressed={isFavorite}
+          onClick={handleToggleFavorite}
           className="
             absolute
             right-2
@@ -109,6 +182,7 @@ function ProductCard({ product }: ProductCardProps) {
             flex
             h-7
             w-7
+            cursor-pointer
             items-center
             justify-center
             rounded-full
@@ -118,16 +192,16 @@ function ProductCard({ product }: ProductCardProps) {
             text-[#5e554e]
             transition-colors
             hover:text-red-500
-            cursor-pointer
           "
         >
           {isFavorite ? "♥" : "♡"}
         </button>
       </div>
 
-      {/* =========================================
+      {/* =================================================
           INFORMATION
-      ========================================== */}
+      ================================================== */}
+
       <div
         className="
           flex
@@ -143,6 +217,7 @@ function ProductCard({ product }: ProductCardProps) {
         "
       >
         {/* PRODUCT NAME */}
+
         <Link to={`/products/${product.id}`} className="min-w-0">
           <h3
             className="
@@ -160,6 +235,7 @@ function ProductCard({ product }: ProductCardProps) {
         </Link>
 
         {/* PRICE + CART */}
+
         <div className="flex items-center justify-between gap-2">
           <p
             className="
@@ -182,6 +258,7 @@ function ProductCard({ product }: ProductCardProps) {
               flex
               h-[24px]
               shrink-0
+              cursor-pointer
               items-center
               justify-center
               gap-1
@@ -194,7 +271,6 @@ function ProductCard({ product }: ProductCardProps) {
               text-white
               transition-colors
               hover:bg-[#3b2f25]
-              cursor-pointer
               sm:h-[25px]
               sm:px-2.5
               sm:text-[9px]

@@ -16,7 +16,7 @@ function Hero() {
         {/* <div className="absolute inset-0 bg-black/25" /> */}
 
         {/* Content */}
-        <div className="absolute inset-0 flex mt-20 justify-center px-4">
+        <div className="absolute inset-0 flex mt-22 justify-center px-4">
           <div className="text-center text-black">
             <p className="font-display mb-3 text-2xl  md:text-4xl">NESTA.COM</p>
 

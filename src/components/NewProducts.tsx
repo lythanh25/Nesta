@@ -72,7 +72,7 @@ function NewProducts() {
 
   return (
     <section className="bg-[#f7f1ed] px-5 pb-8 md:px-8 md:pb-10 ">
-      <div className="mx-auto max-w-[960px]">
+      <div className="mx-auto max-w-7xl">
         <SectionTitle>SẢN PHẨM MỚI</SectionTitle>
 
         {/* =========================================

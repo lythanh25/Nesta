@@ -26,7 +26,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 function CollectionSection() {
   return (
     <section className="bg-[#f7f1ed] px-5 pb-12 pt-5 md:px-8 md:pb-16 md:pt-6">
-      <div className="mx-auto max-w-[960px]">
+      <div className="mx-auto max-w-7xl">
         <SectionTitle>BỘ SƯU TẬP</SectionTitle>
 
         <ProductGrid products={collectionProducts} />
