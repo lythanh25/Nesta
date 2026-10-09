@@ -1,59 +1,74 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import searchIcon from "../../assets/search.svg";
 import cartIcon from "../../assets/shopping-cart.svg";
 import userIcon from "../../assets/user-alt.svg";
+import { products } from "../../data/products";
 
-type Category = {
+type CategoryMenu = {
   name: string;
-  subcategories?: string[];
+  subcategories: string[];
 };
 
-const productMenu: Category[] = [
-  {
-    name: "SOFA",
-    subcategories: ["Sofa đệm", "Gối sofa", "Sofa băng"],
-  },
-  {
-    name: "GHẾ",
-    subcategories: [
-      "Ghế ăn",
-      "Ghế ban công",
-      "Ghế cà phê",
-      "Ghế văn phòng",
-      "Ghế bar",
-    ],
-  },
-  {
-    name: "BÀN",
-    subcategories: ["Bàn ăn", "Bàn ban công", "Bàn cà phê", "Bàn văn phòng"],
-  },
-  {
-    name: "TỦ",
-    subcategories: ["Tủ tivi", "Tủ trang điểm", "Tủ quần áo"],
-  },
-  {
-    name: "KỆ",
-    subcategories: ["Kệ sách", "Kệ trang trí"],
-  },
-  {
-    name: "TRANG TRÍ",
-    subcategories: ["Bình hoa", "Khung tranh", "Đồng hồ"],
-  },
-  {
-    name: "GIƯỜNG",
-    subcategories: ["Giường", "Giường cho bé", "Giường cao cấp"],
-  },
-  {
-    name: "ĐÈN",
-    subcategories: ["Đèn ngủ", "Đèn treo tường", "Đèn LED"],
-  },
-  {
-    name: "GƯƠNG",
-    subcategories: ["Gương để bàn", "Gương trang trí"],
-  },
-];
+/**
+ * Chuẩn hóa chuỗi để so sánh category/subcategory.
+ * Ví dụ:
+ * "GHẾ"      -> "ghe"
+ * "Ghế"      -> "ghe"
+ * "GIƯỜNG"   -> "giuong"
+ * "Giường"   -> "giuong"
+ */
+function normalizeText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * Lấy category thực tế từ products.
+ *
+ * Quan trọng:
+ * Header không tự tạo "GHẾ", "BÀN", ...
+ * mà lấy giá trị thật đang có trong products.ts.
+ *
+ * Nhờ vậy URL luôn khớp với Products.tsx.
+ */
+const productMenu: CategoryMenu[] = Array.from(
+  new Map(
+    products.map(function (product) {
+      return [
+        normalizeText(product.category),
+        {
+          name: product.category,
+          subcategories: [],
+        },
+      ];
+    }),
+  ).values(),
+).map(function (category) {
+  const subcategories = Array.from(
+    new Set(
+      products
+        .filter(function (product) {
+          return (
+            normalizeText(product.category) === normalizeText(category.name)
+          );
+        })
+        .map(function (product) {
+          return product.subcategory;
+        })
+        .filter(Boolean),
+    ),
+  );
+
+  return {
+    name: category.name,
+    subcategories,
+  };
+});
 
 function Header() {
   const navigate = useNavigate();
@@ -63,37 +78,75 @@ function Header() {
   const [openCategory, setOpenCategory] = useState<string | null>(null);
   const [searchValue, setSearchValue] = useState("");
 
-  const handleSearch = () => {
+  /**
+   * Tính số lượng category.
+   * Không bắt buộc nhưng giúp menu luôn ổn định.
+   */
+  const categories = useMemo(function () {
+    return productMenu;
+  }, []);
+
+  // =========================================================
+  // SEARCH
+  // =========================================================
+
+  function handleSearch() {
     const keyword = searchValue.trim();
 
     if (!keyword) {
       navigate("/products");
+      setIsMenuOpen(false);
+      setIsProductOpen(false);
       return;
     }
 
     navigate(`/products?search=${encodeURIComponent(keyword)}`);
-    setIsMenuOpen(false);
-  };
 
-  const handleSearchKeyDown = (
-    event: React.KeyboardEvent<HTMLInputElement>,
-  ) => {
-    if (event.key === "Enter") {
-      handleSearch();
-    }
-  };
-
-  const handleCategoryToggle = (categoryName: string) => {
-    setOpenCategory((current) =>
-      current === categoryName ? null : categoryName,
-    );
-  };
-
-  const closeMobileMenu = () => {
     setIsMenuOpen(false);
     setIsProductOpen(false);
     setOpenCategory(null);
-  };
+  }
+
+  function handleSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Enter") {
+      handleSearch();
+    }
+  }
+
+  // =========================================================
+  // CATEGORY
+  // =========================================================
+
+  function handleCategoryToggle(categoryName: string) {
+    setOpenCategory(function (current) {
+      return current === categoryName ? null : categoryName;
+    });
+  }
+
+  function closeDesktopProductMenu() {
+    setIsProductOpen(false);
+    setOpenCategory(null);
+  }
+
+  function closeMobileMenu() {
+    setIsMenuOpen(false);
+    setIsProductOpen(false);
+    setOpenCategory(null);
+  }
+
+  // =========================================================
+  // URL
+  // =========================================================
+
+  function getCategoryUrl(category: string) {
+    return `/products?category=${encodeURIComponent(category)}`;
+  }
+
+  function getSubcategoryUrl(category: string, subcategory: string) {
+    return `/products?category=${encodeURIComponent(
+      category,
+    )}&subcategory=${encodeURIComponent(subcategory)}`;
+  }
 
   return (
     <header className="fixed left-0 top-0 z-50 w-full bg-[#3B2F25] text-white">
@@ -101,7 +154,9 @@ function Header() {
           DESKTOP HEADER
       ========================================================== */}
       <div className="mx-auto hidden h-[70px] max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-5 lg:grid">
-        {/* Logo */}
+        {/* =====================================================
+            LOGO
+        ====================================================== */}
         <Link
           to="/"
           className="justify-self-start shrink-0 font-serif text-xl tracking-wide text-white transition-opacity hover:opacity-80"
@@ -109,26 +164,38 @@ function Header() {
           NESTA.COM
         </Link>
 
-        {/* Main Navigation */}
+        {/* =====================================================
+            MAIN NAVIGATION
+        ====================================================== */}
         <nav className="flex h-full items-center gap-8">
           {/* Trang chủ */}
           <Link
             to="/"
-            className="flex h-full items-center text-sm font-medium transition-colors hover:text-white/70"
+            className="flex h-full items-center whitespace-nowrap text-sm font-medium transition-colors hover:text-white/70"
           >
             Trang chủ
           </Link>
 
-          {/* Danh mục sản phẩm */}
+          {/* =================================================
+              DANH MỤC SẢN PHẨM
+          ================================================== */}
           <div
             className="relative h-full"
-            onMouseEnter={() => setIsProductOpen(true)}
-            onMouseLeave={() => setIsProductOpen(false)}
+            onMouseEnter={function () {
+              setIsProductOpen(true);
+            }}
+            onMouseLeave={function () {
+              setIsProductOpen(false);
+            }}
           >
             <button
               type="button"
-              onClick={() => setIsProductOpen((current) => !current)}
-              className="flex h-full items-center text-sm font-medium transition-colors hover:text-white/70"
+              onClick={function () {
+                setIsProductOpen(function (current) {
+                  return !current;
+                });
+              }}
+              className="flex h-full items-center whitespace-nowrap text-sm font-medium transition-colors hover:text-white/70"
             >
               Danh mục sản phẩm
               <svg
@@ -141,57 +208,61 @@ function Header() {
               >
                 <path
                   fillRule="evenodd"
-                  d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.51a.75.75 0 01-1.08 0l-4.25-4.51a.75.75 0 01.02-1.06z"
+                  d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.51a.75.75 0 01-1.08 0z"
                   clipRule="evenodd"
                 />
               </svg>
             </button>
 
-            {/* Mega Menu */}
+            {/* =================================================
+                MEGA MENU
+            ================================================== */}
             {isProductOpen && (
               <div className="absolute left-1/2 top-[70px] w-[900px] -translate-x-1/2 border-t border-white/10 bg-white text-[#2D261F] shadow-xl">
                 <div className="grid grid-cols-5 gap-x-10 gap-y-8 p-8">
-                  {productMenu.map((category) => (
-                    <div key={category.name}>
-                      <Link
-                        to={`/products?category=${encodeURIComponent(
-                          category.name,
-                        )}`}
-                        onClick={() => setIsProductOpen(false)}
-                        className="mb-3 block text-sm font-semibold tracking-wide transition-colors hover:text-[#6E5A47]"
-                      >
-                        {category.name}
-                      </Link>
+                  {categories.map(function (category) {
+                    return (
+                      <div key={category.name}>
+                        {/* Category */}
+                        <Link
+                          to={getCategoryUrl(category.name)}
+                          onClick={closeDesktopProductMenu}
+                          className="mb-3 block text-sm font-semibold uppercase tracking-wide transition-colors hover:text-[#6E5A47]"
+                        >
+                          {category.name}
+                        </Link>
 
-                      {category.subcategories &&
-                        category.subcategories.length > 0 && (
+                        {/* Subcategory */}
+                        {category.subcategories.length > 0 && (
                           <ul className="space-y-2">
-                            {category.subcategories.map((subcategory) => (
-                              <li key={subcategory}>
-                                <Link
-                                  to={`/products?category=${encodeURIComponent(
-                                    category.name,
-                                  )}&subcategory=${encodeURIComponent(
-                                    subcategory,
-                                  )}`}
-                                  onClick={() => setIsProductOpen(false)}
-                                  className="block text-xs text-[#756D66] transition-colors hover:text-[#2D261F]"
-                                >
-                                  {subcategory}
-                                </Link>
-                              </li>
-                            ))}
+                            {category.subcategories.map(function (subcategory) {
+                              return (
+                                <li key={subcategory}>
+                                  <Link
+                                    to={getSubcategoryUrl(
+                                      category.name,
+                                      subcategory,
+                                    )}
+                                    onClick={closeDesktopProductMenu}
+                                    className="block text-xs text-[#756D66] transition-colors hover:text-[#2D261F]"
+                                  >
+                                    {subcategory}
+                                  </Link>
+                                </li>
+                              );
+                            })}
                           </ul>
                         )}
-                    </div>
-                  ))}
+                      </div>
+                    );
+                  })}
                 </div>
 
-                {/* View all */}
+                {/* Xem tất cả */}
                 <div className="border-t border-[#E5E0DA] px-8 py-4">
                   <Link
                     to="/products"
-                    onClick={() => setIsProductOpen(false)}
+                    onClick={closeDesktopProductMenu}
                     className="inline-flex items-center text-sm font-medium transition-colors hover:text-[#6E5A47]"
                   >
                     Xem tất cả sản phẩm
@@ -205,20 +276,24 @@ function Header() {
           {/* Về chúng tôi */}
           <Link
             to="/about"
-            className="flex h-full items-center text-sm font-medium transition-colors hover:text-white/70"
+            className="flex h-full items-center whitespace-nowrap text-sm font-medium transition-colors hover:text-white/70"
           >
             Về chúng tôi
           </Link>
         </nav>
 
-        {/* Right Actions */}
-        <div className="flex items-center justify-self-end gap-4">
+        {/* =====================================================
+            RIGHT ACTIONS
+        ====================================================== */}
+        <div className="flex items-center justify-self-end gap-3">
           {/* Search */}
           <div className="flex h-9 w-[230px] items-center overflow-hidden rounded border border-white/50 bg-white/10">
             <input
               type="text"
               value={searchValue}
-              onChange={(event) => setSearchValue(event.target.value)}
+              onChange={function (event) {
+                setSearchValue(event.target.value);
+              }}
               onKeyDown={handleSearchKeyDown}
               placeholder="Tìm kiếm sản phẩm..."
               className="min-w-0 flex-1 bg-transparent px-3 text-xs text-white outline-none placeholder:text-white/60"
@@ -266,6 +341,7 @@ function Header() {
           </Link>
         </div>
       </div>
+
       {/* =========================================================
           MOBILE HEADER
       ========================================================== */}
@@ -273,7 +349,11 @@ function Header() {
         {/* Hamburger */}
         <button
           type="button"
-          onClick={() => setIsMenuOpen((current) => !current)}
+          onClick={function () {
+            setIsMenuOpen(function (current) {
+              return !current;
+            });
+          }}
           className="flex h-10 w-10 items-center justify-start"
           aria-label={isMenuOpen ? "Đóng menu" : "Mở menu"}
           aria-expanded={isMenuOpen}
@@ -314,7 +394,7 @@ function Header() {
         <div className="ml-auto flex items-center gap-1">
           <button
             type="button"
-            onClick={() => {
+            onClick={function () {
               setIsMenuOpen(true);
               setIsProductOpen(false);
             }}
@@ -342,6 +422,7 @@ function Header() {
           </Link>
         </div>
       </div>
+
       {/* =========================================================
           MOBILE MENU
       ========================================================== */}
@@ -354,7 +435,9 @@ function Header() {
                 <input
                   type="text"
                   value={searchValue}
-                  onChange={(event) => setSearchValue(event.target.value)}
+                  onChange={function (event) {
+                    setSearchValue(event.target.value);
+                  }}
                   onKeyDown={handleSearchKeyDown}
                   placeholder="Tìm kiếm sản phẩm..."
                   className="min-w-0 flex-1 bg-transparent px-3 text-sm text-white outline-none placeholder:text-white/60"
@@ -385,11 +468,17 @@ function Header() {
               Trang chủ
             </Link>
 
-            {/* Danh mục */}
+            {/* =================================================
+                DANH MỤC
+            ================================================== */}
             <div className="border-b border-white/10">
               <button
                 type="button"
-                onClick={() => setIsProductOpen((current) => !current)}
+                onClick={function () {
+                  setIsProductOpen(function (current) {
+                    return !current;
+                  });
+                }}
                 className="flex w-full items-center justify-between py-4 text-left text-sm font-medium"
               >
                 <span>Danh mục sản phẩm</span>
@@ -403,7 +492,7 @@ function Header() {
                 >
                   <path
                     fillRule="evenodd"
-                    d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.51a.75.75 0 01-1.08 0l-4.25-4.51a.75.75 0 01.02-1.06z"
+                    d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.51a.75.75 0 01-1.08 0z"
                     clipRule="evenodd"
                   />
                 </svg>
@@ -411,80 +500,82 @@ function Header() {
 
               {isProductOpen && (
                 <div className="pb-3">
-                  {productMenu.map((category) => (
-                    <div
-                      key={category.name}
-                      className="border-t border-white/5"
-                    >
-                      {category.subcategories &&
-                      category.subcategories.length > 0 ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => handleCategoryToggle(category.name)}
-                            className="flex w-full items-center justify-between py-3 pl-3 text-left text-sm text-white/90"
-                          >
-                            <span>{category.name}</span>
-
-                            <svg
-                              className={`mr-1 h-3.5 w-3.5 transition-transform ${
-                                openCategory === category.name
-                                  ? "rotate-180"
-                                  : ""
-                              }`}
-                              viewBox="0 0 20 20"
-                              fill="currentColor"
+                  {categories.map(function (category) {
+                    return (
+                      <div
+                        key={category.name}
+                        className="border-t border-white/5"
+                      >
+                        {category.subcategories.length > 0 ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={function () {
+                                handleCategoryToggle(category.name);
+                              }}
+                              className="flex w-full items-center justify-between py-3 pl-3 text-left text-sm text-white/90"
                             >
-                              <path
-                                fillRule="evenodd"
-                                d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25-4.51a.75.75 0 01-1.08 0l-4.25-4.51a.75.75 0 01.02-1.06z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                          </button>
+                              <span>{category.name}</span>
 
-                          {openCategory === category.name && (
-                            <div className="pb-2 pl-6">
-                              <Link
-                                to={`/products?category=${encodeURIComponent(
-                                  category.name,
-                                )}`}
-                                onClick={closeMobileMenu}
-                                className="block py-2 text-xs text-white/60"
+                              <svg
+                                className={`mr-1 h-3.5 w-3.5 transition-transform ${
+                                  openCategory === category.name
+                                    ? "rotate-180"
+                                    : ""
+                                }`}
+                                viewBox="0 0 20 20"
+                                fill="currentColor"
                               >
-                                Tất cả {category.name.toLowerCase()}
-                              </Link>
+                                <path
+                                  fillRule="evenodd"
+                                  d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04z"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                            </button>
 
-                              {category.subcategories.map((subcategory) => (
+                            {openCategory === category.name && (
+                              <div className="pb-2 pl-6">
                                 <Link
-                                  key={subcategory}
-                                  to={`/products?category=${encodeURIComponent(
-                                    category.name,
-                                  )}&subcategory=${encodeURIComponent(
-                                    subcategory,
-                                  )}`}
+                                  to={getCategoryUrl(category.name)}
                                   onClick={closeMobileMenu}
-                                  className="block py-2 text-xs text-white/60 transition-colors hover:text-white"
+                                  className="block py-2 text-xs text-white/60"
                                 >
-                                  {subcategory}
+                                  Tất cả {category.name.toLowerCase()}
                                 </Link>
-                              ))}
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <Link
-                          to={`/products?category=${encodeURIComponent(
-                            category.name,
-                          )}`}
-                          onClick={closeMobileMenu}
-                          className="block py-3 pl-3 text-sm text-white/90"
-                        >
-                          {category.name}
-                        </Link>
-                      )}
-                    </div>
-                  ))}
+
+                                {category.subcategories.map(
+                                  function (subcategory) {
+                                    return (
+                                      <Link
+                                        key={subcategory}
+                                        to={getSubcategoryUrl(
+                                          category.name,
+                                          subcategory,
+                                        )}
+                                        onClick={closeMobileMenu}
+                                        className="block py-2 text-xs text-white/60 transition-colors hover:text-white"
+                                      >
+                                        {subcategory}
+                                      </Link>
+                                    );
+                                  },
+                                )}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <Link
+                            to={getCategoryUrl(category.name)}
+                            onClick={closeMobileMenu}
+                            className="block py-3 pl-3 text-sm text-white/90"
+                          >
+                            {category.name}
+                          </Link>
+                        )}
+                      </div>
+                    );
+                  })}
 
                   <Link
                     to="/products"

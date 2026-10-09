@@ -31,6 +31,13 @@ export type Product = {
   id: number;
   name: string;
   price: number;
+
+  // Giá gốc, dùng để xác định sản phẩm đang giảm giá
+  originalPrice?: number;
+
+  // Tình trạng tồn kho
+  inStock?: boolean;
+
   category: string;
   subcategory: string;
 
@@ -77,6 +84,8 @@ export const products: Product[] = [
     id: 1,
     name: "Giường 1",
     price: 5000000,
+    originalPrice: 6000000,
+    inStock: true,
 
     category: "Giường",
     subcategory: "Giường ngủ",
@@ -110,6 +119,7 @@ export const products: Product[] = [
     id: 7,
     name: "Minimal Bed",
     price: 9800000,
+    inStock: false,
 
     category: "Giường",
     subcategory: "Giường ngủ",
