@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import searchIcon from "../../assets/search.svg";
@@ -124,6 +124,11 @@ function Header() {
   }
 
   function closeDesktopProductMenu() {
+    if (closeMenuTimeout.current !== null) {
+      clearTimeout(closeMenuTimeout.current);
+      closeMenuTimeout.current = null;
+    }
+
     setIsProductOpen(false);
     setOpenCategory(null);
   }
@@ -146,6 +151,40 @@ function Header() {
     return `/products?category=${encodeURIComponent(
       category,
     )}&subcategory=${encodeURIComponent(subcategory)}`;
+  }
+
+  // Danh muc
+  const closeMenuTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleProductMouseEnter() {
+    if (closeMenuTimeout.current !== null) {
+      clearTimeout(closeMenuTimeout.current);
+      closeMenuTimeout.current = null;
+    }
+
+    setIsProductOpen(true);
+  }
+
+  function handleProductMouseLeave() {
+    if (closeMenuTimeout.current !== null) {
+      clearTimeout(closeMenuTimeout.current);
+    }
+
+    closeMenuTimeout.current = setTimeout(() => {
+      setIsProductOpen(false);
+      setOpenCategory(null);
+      closeMenuTimeout.current = null;
+    }, 250);
+  }
+
+  function handleProductClick() {
+    if (closeMenuTimeout.current !== null) {
+      clearTimeout(closeMenuTimeout.current);
+      closeMenuTimeout.current = null;
+    }
+
+    setIsProductOpen((current) => !current);
+    setOpenCategory(null);
   }
 
   return (
@@ -181,21 +220,31 @@ function Header() {
           ================================================== */}
           <div
             className="relative h-full"
-            onMouseEnter={function () {
-              setIsProductOpen(true);
-            }}
-            onMouseLeave={function () {
-              setIsProductOpen(false);
-            }}
+            onMouseEnter={handleProductMouseEnter}
+            onMouseLeave={handleProductMouseLeave}
           >
             <button
               type="button"
-              onClick={function () {
-                setIsProductOpen(function (current) {
-                  return !current;
-                });
-              }}
-              className="flex h-full items-center whitespace-nowrap text-sm font-medium transition-colors hover:text-white/70"
+              onClick={handleProductClick}
+              aria-expanded={isProductOpen}
+              aria-haspopup="true"
+              className="
+                relative
+                flex
+                h-full
+                items-center
+                whitespace-nowrap
+                py-2
+                text-sm
+                font-medium
+                transition-colors
+                hover:text-white/70
+                after:absolute
+                after:inset-x-0
+                after:-bottom-1
+                after:h-2
+                after:content-['']
+              "
             >
               Danh mục sản phẩm
               <svg
@@ -214,60 +263,104 @@ function Header() {
               </svg>
             </button>
 
-            {/* =================================================
-                MEGA MENU
-            ================================================== */}
+            {/* MEGA MENU */}
             {isProductOpen && (
-              <div className="absolute left-1/2 top-[70px] w-[900px] -translate-x-1/2 border-t border-white/10 bg-white text-[#2D261F] shadow-xl">
-                <div className="grid grid-cols-5 gap-x-10 gap-y-8 p-8">
-                  {categories.map(function (category) {
-                    return (
-                      <div key={category.name}>
-                        {/* Category */}
-                        <Link
-                          to={getCategoryUrl(category.name)}
-                          onClick={closeDesktopProductMenu}
-                          className="mb-3 block text-sm font-semibold uppercase tracking-wide transition-colors hover:text-[#6E5A47]"
-                        >
-                          {category.name}
-                        </Link>
+              <div
+                className="
+                  absolute
+                  left-1/2
+                  top-full
+                  z-50
+                  w-[900px]
+                  max-w-[calc(100vw-32px)]
+                  -translate-x-1/2
+                  pt-2
+                "
+              >
+                {/* Vùng đệm phía trên giúp chuột di chuyển dễ hơn */}
+                <div
+                  className="
+                    border-t
+                    border-[#E5E0DA]
+                    bg-white
+                    text-[#2D261F]
+                    shadow-xl
+                  "
+                >
+                  <div className="grid grid-cols-5 gap-x-10 gap-y-8 p-8">
+                    {categories.map(function (category) {
+                      return (
+                        <div key={category.name}>
+                          {/* Category */}
+                          <Link
+                            to={getCategoryUrl(category.name)}
+                            onClick={closeDesktopProductMenu}
+                            className="
+                              mb-3
+                              block
+                              text-sm
+                              font-semibold
+                              uppercase
+                              tracking-wide
+                              transition-colors
+                              hover:text-[#6E5A47]
+                            "
+                          >
+                            {category.name}
+                          </Link>
 
-                        {/* Subcategory */}
-                        {category.subcategories.length > 0 && (
-                          <ul className="space-y-2">
-                            {category.subcategories.map(function (subcategory) {
-                              return (
-                                <li key={subcategory}>
-                                  <Link
-                                    to={getSubcategoryUrl(
-                                      category.name,
-                                      subcategory,
-                                    )}
-                                    onClick={closeDesktopProductMenu}
-                                    className="block text-xs text-[#756D66] transition-colors hover:text-[#2D261F]"
-                                  >
-                                    {subcategory}
-                                  </Link>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                          {/* Subcategory */}
+                          {category.subcategories.length > 0 && (
+                            <ul className="space-y-2">
+                              {category.subcategories.map(
+                                function (subcategory) {
+                                  return (
+                                    <li key={subcategory}>
+                                      <Link
+                                        to={getSubcategoryUrl(
+                                          category.name,
+                                          subcategory,
+                                        )}
+                                        onClick={closeDesktopProductMenu}
+                                        className="
+                                          block
+                                          text-xs
+                                          text-[#756D66]
+                                          transition-colors
+                                          hover:text-[#2D261F]
+                                        "
+                                      >
+                                        {subcategory}
+                                      </Link>
+                                    </li>
+                                  );
+                                },
+                              )}
+                            </ul>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
 
-                {/* Xem tất cả */}
-                <div className="border-t border-[#E5E0DA] px-8 py-4">
-                  <Link
-                    to="/products"
-                    onClick={closeDesktopProductMenu}
-                    className="inline-flex items-center text-sm font-medium transition-colors hover:text-[#6E5A47]"
-                  >
-                    Xem tất cả sản phẩm
-                    <span className="ml-2">→</span>
-                  </Link>
+                  {/* Xem tất cả */}
+                  <div className="border-t border-[#E5E0DA] px-8 py-4">
+                    <Link
+                      to="/products"
+                      onClick={closeDesktopProductMenu}
+                      className="
+                        inline-flex
+                        items-center
+                        text-sm
+                        font-medium
+                        transition-colors
+                        hover:text-[#6E5A47]
+                      "
+                    >
+                      Xem tất cả sản phẩm
+                      <span className="ml-2">→</span>
+                    </Link>
+                  </div>
                 </div>
               </div>
             )}

@@ -27,6 +27,8 @@ export type ProductSize = {
   height: number;
 };
 
+export type Space = "Phòng khách" | "Phòng ngủ" | "Phòng ăn" | "Phòng làm việc";
+
 export type Product = {
   id: number;
   name: string;
@@ -40,16 +42,13 @@ export type Product = {
 
   category: string;
   subcategory: string;
+  spaces?: Space[];
 
   images: string[];
-
   description: string;
   detailDescription?: string;
-
   specifications?: Record<string, string>;
-
   sizes?: ProductSize[];
-
   model3D?: string;
 };
 
@@ -89,6 +88,7 @@ export const products: Product[] = [
 
     category: "Giường",
     subcategory: "Giường ngủ",
+    spaces: ["Phòng ngủ"],
 
     images: [bed1Image1, bed1Image2, bed1Image3, bed1Image4],
 
@@ -123,6 +123,7 @@ export const products: Product[] = [
 
     category: "Giường",
     subcategory: "Giường ngủ",
+    spaces: ["Phòng ngủ"],
 
     images: [
       "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=800&q=80",
@@ -152,6 +153,7 @@ export const products: Product[] = [
 
     category: "Giường",
     subcategory: "Giường đôi",
+    spaces: ["Phòng ngủ"],
 
     images: [
       "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=800&q=80",
@@ -185,6 +187,7 @@ export const products: Product[] = [
 
     category: "Sofa",
     subcategory: "Sofa phòng khách",
+    spaces: ["Phòng khách"],
 
     images: [
       "https://images.unsplash.com/photo-1550254478-ead40cc54513?auto=format&fit=crop&w=800&q=80",
@@ -251,6 +254,7 @@ export const products: Product[] = [
 
     category: "Ghế",
     subcategory: "Ghế ăn",
+    spaces: ["Phòng khách", "Phòng ăn", "Phòng làm việc"],
 
     images: [
       "https://images.unsplash.com/photo-1592078615290-033ee584e267?auto=format&fit=crop&w=800&q=80",
@@ -384,6 +388,7 @@ export const products: Product[] = [
 
     category: "Tủ",
     subcategory: "Tủ trang trí",
+    spaces: ["Phòng khách", "Phòng ngủ", "Phòng làm việc"],
 
     images: [
       "https://images.unsplash.com/photo-1558997519-83ea9252edf8?auto=format&fit=crop&w=800&q=80",
@@ -420,6 +425,7 @@ export const products: Product[] = [
 
     category: "Đèn",
     subcategory: "Đèn sàn",
+    spaces: ["Phòng khách", "Phòng ngủ", "Phòng làm việc"],
 
     images: [
       "https://images.unsplash.com/photo-1507473885765-e6ed057f782c?auto=format&fit=crop&w=800&q=80",
@@ -489,6 +495,7 @@ export const products: Product[] = [
 
     category: "Gương",
     subcategory: "Gương treo tường",
+    spaces: ["Phòng khách", "Phòng ngủ"],
 
     images: [
       "https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=800&q=80",
@@ -553,6 +560,7 @@ export const products: Product[] = [
 
     category: "Trang trí",
     subcategory: "Cây trang trí",
+    spaces: ["Phòng khách", "Phòng ngủ", "Phòng làm việc"],
 
     images: [
       "https://images.unsplash.com/photo-1485955900006-10f4d324d411?auto=format&fit=crop&w=800&q=80",

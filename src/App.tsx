@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
+import ScrollToTop from "./components/ScrollToTop";
 import MainLayout from "./components/layout/MainLayout";
 
 import Home from "./pages/Home/Home";
@@ -13,6 +14,7 @@ import About from "./pages/About/About";
 function App() {
   return (
     <BrowserRouter basename="/Nesta">
+      <ScrollToTop />
       <Routes>
         <Route element={<MainLayout />}>
           <Route path="/" element={<Home />} />

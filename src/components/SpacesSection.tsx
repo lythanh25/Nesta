@@ -30,22 +30,22 @@ const spaces = [
   {
     name: "Phòng khách",
     image: Living,
-    category: "Phòng khách",
+    slug: "phong-khach",
   },
   {
     name: "Phòng ngủ",
     image: Bedroom,
-    category: "Phòng ngủ",
+    slug: "phong-ngu",
   },
   {
     name: "Phòng ăn",
     image: Dining,
-    category: "Phòng ăn",
+    slug: "phong-an",
   },
   {
     name: "Phòng làm việc",
     image: Office,
-    category: "Phòng làm việc",
+    slug: "phong-lam-viec",
   },
 ];
 
@@ -60,7 +60,7 @@ function SpacesSection() {
             return (
               <Link
                 key={space.name}
-                to={`/products?category=${encodeURIComponent(space.category)}`}
+                to={`/products?space=${space.slug}`}
                 className="group"
               >
                 <div className="aspect-[4/3] overflow-hidden bg-[#e9e4de]">
