@@ -1,4 +1,5 @@
 import bannerInfo from "../assets/banner-timhieu.jpg";
+import { Link } from "react-router-dom";
 
 function AboutSection() {
   return (
@@ -18,12 +19,12 @@ function AboutSection() {
             cấp và bền bỉ với thời gian cho ngôi nhà của bạn.
           </p>
 
-          <button
-            type="button"
+          <Link
+            to="/about"
             className="mt-6 w-fit border border-white px-5 py-2 text-sm transition hover:bg-white hover:text-[#806b56]"
           >
             Xem thêm
-          </button>
+          </Link>
         </div>
 
         <div className="h-[300px] md:h-full">

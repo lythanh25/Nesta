@@ -3,7 +3,12 @@ import { Link, useParams } from "react-router-dom";
 
 import Product3DViewer from "../../components/product/Product3DViewer";
 import ProductGrid from "../../components/product/ProductGrid";
-import { getProductById, products } from "../../data/products";
+import {
+  getProductById,
+  getSizePrice,
+  getSizeOriginalPrice,
+  products,
+} from "../../data/products";
 import {
   isProductFavorite,
   toggleProductFavorite,
@@ -73,7 +78,7 @@ function ProductDetail() {
    * Toàn bộ Hooks nằm trong component con.
    */
 
-  return <ProductDetailContent product={product} />;
+  return <ProductDetailContent key={product.id} product={product} />;
 }
 
 // =====================================================
@@ -131,7 +136,21 @@ function ProductDetailContent({ product }: ProductDetailContentProps) {
 
   const currentImage = productImages[safeSelectedImage];
 
-  const formattedPrice = new Intl.NumberFormat("vi-VN").format(product.price);
+  // Giá hiển thị được tính theo kích thước đang chọn.
+  const selectedSizeOption =
+    product.sizes?.find(function (size) {
+      return size.label === selectedSize;
+    }) ?? product.sizes?.[0];
+
+  const currentPrice = getSizePrice(product, selectedSizeOption);
+  const originalPrice = getSizeOriginalPrice(product, selectedSizeOption);
+  const formattedPrice = new Intl.NumberFormat("vi-VN").format(currentPrice);
+  const formattedOriginalPrice =
+    originalPrice !== undefined
+      ? new Intl.NumberFormat("vi-VN").format(originalPrice)
+      : undefined;
+  const hasDiscount =
+    originalPrice !== undefined && originalPrice > currentPrice;
 
   // =====================================================
   // RELATED PRODUCTS
@@ -532,16 +551,17 @@ function ProductDetailContent({ product }: ProductDetailContentProps) {
 
             {/* PRICE */}
 
-            <p
-              className="
-              mt-5
-              text-xl
-              font-medium
-              text-[#3b2f25]
-            "
-            >
-              {formattedPrice} VNĐ
-            </p>
+            <div className="mt-5 flex flex-wrap items-baseline gap-3">
+              <p className="text-xl font-medium text-[#3b2f25]">
+                {formattedPrice} VNĐ
+              </p>
+
+              {hasDiscount && formattedOriginalPrice && (
+                <p className="text-sm text-[#8c8178] line-through">
+                  {formattedOriginalPrice} VNĐ
+                </p>
+              )}
+            </div>
 
             <div className="my-7 h-px bg-[#ded7d0]" />
 
@@ -609,6 +629,7 @@ function ProductDetailContent({ product }: ProductDetailContentProps) {
                         onClick={function () {
                           setSelectedSize(size.label);
                         }}
+                        aria-pressed={isSelected}
                         className={`
                             border
                             px-3
@@ -641,6 +662,21 @@ function ProductDetailContent({ product }: ProductDetailContentProps) {
                             `}
                         >
                           {formatSize(size)}
+                        </span>
+
+                        <span
+                          className={`
+                            mt-2
+                            block
+                            text-sm
+                            font-medium
+                            ${isSelected ? "text-white" : "text-[#3b2f25]"}
+                          `}
+                        >
+                          {new Intl.NumberFormat("vi-VN").format(
+                            getSizePrice(product, size),
+                          )}{" "}
+                          VNĐ
                         </span>
                       </button>
                     );

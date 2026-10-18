@@ -1,12 +1,13 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 
-import { products, type Product } from "../../data/products";
+import { getSizePrice, products, type Product } from "../../data/products";
 
 const CART_STORAGE_KEY = "nesta-cart";
 const PROFILE_STORAGE_KEY = "nesta-profile";
 const ADDRESS_STORAGE_KEY = "nesta-address";
 const ORDERS_STORAGE_KEY = "nesta-orders";
+const SHIPPING_FEE = 30_000;
 
 type CartItem = {
   productId: number;
@@ -66,6 +67,7 @@ type CartLine = {
   product: Product;
   size?: string;
   quantity: number;
+  unitPrice: number;
 };
 
 function readStorage<T>(key: string, fallback: T): T {
@@ -81,26 +83,28 @@ function formatPrice(price: number) {
   return new Intl.NumberFormat("vi-VN").format(price);
 }
 
+function isCartItem(value: unknown): value is CartItem {
+  if (typeof value !== "object" || value === null) return false;
+
+  const item = value as Record<string, unknown>;
+  return (
+    typeof item.productId === "number" &&
+    Number.isFinite(item.productId) &&
+    typeof item.quantity === "number" &&
+    Number.isFinite(item.quantity) &&
+    Number.isInteger(item.quantity) &&
+    item.quantity > 0 &&
+    (item.size === undefined || typeof item.size === "string")
+  );
+}
+
+function readCartItems(): CartItem[] {
+  const saved = readStorage<unknown>(CART_STORAGE_KEY, []);
+  return Array.isArray(saved) ? saved.filter(isCartItem) : [];
+}
+
 function Checkout() {
-  const [cartItems, setCartItems] = useState<CartItem[]>(() => {
-    const saved = readStorage<unknown>(CART_STORAGE_KEY, []);
-
-    if (!Array.isArray(saved)) {
-      return [];
-    }
-
-    return saved.filter(
-      (item): item is CartItem =>
-        typeof item === "object" &&
-        item !== null &&
-        "productId" in item &&
-        "quantity" in item &&
-        typeof item.productId === "number" &&
-        typeof item.quantity === "number" &&
-        item.quantity > 0,
-    );
-  });
-
+  const [cartItems, setCartItems] = useState<CartItem[]>(readCartItems);
   const [customer, setCustomer] = useState<CustomerInfo>(() => {
     const profile = readStorage<ProfileInfo>(PROFILE_STORAGE_KEY, {
       fullName: "",
@@ -108,7 +112,6 @@ function Checkout() {
       phone: "",
       birthday: "",
     });
-
     const address = readStorage<AddressInfo>(ADDRESS_STORAGE_KEY, {
       recipient: "",
       phone: "",
@@ -129,48 +132,40 @@ function Checkout() {
       note: "",
     };
   });
-
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "bank">("cod");
-
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState("");
   const [successOrder, setSuccessOrder] = useState<Order | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const cartProducts: CartLine[] = cartItems.flatMap((item) => {
-    const product = products.find((product) => product.id === item.productId);
+    const product = products.find(
+      (candidate) => candidate.id === item.productId,
+    );
+    if (!product) return [];
 
-    if (!product) {
-      return [];
-    }
+    const selectedSize = product.sizes?.find(
+      (productSize) => productSize.label === item.size,
+    );
+    // Giá theo kích thước đã chọn phải đồng nhất với trang giỏ hàng.
+    const unitPrice = getSizePrice(product, selectedSize);
 
-    return [
-      {
-        product,
-        size: item.size,
-        quantity: item.quantity,
-      },
-    ];
+    return [{ product, size: item.size, quantity: item.quantity, unitPrice }];
   });
 
   const subtotal = cartProducts.reduce(
-    (total, item) => total + item.product.price * item.quantity,
+    (sum, item) => sum + item.unitPrice * item.quantity,
     0,
   );
-
-  const shipping = cartProducts.length > 0 ? 30000 : 0;
+  const shipping = cartProducts.length > 0 ? SHIPPING_FEE : 0;
   const total = subtotal + shipping;
 
   const inputClass =
     "h-9 w-full border border-[#cfc5bc] bg-white px-3 text-[11px] text-[#2d261f] outline-none transition placeholder:text-[#a59a91] focus:border-[#6e5a47] md:h-10";
-
   const labelClass = "mb-1.5 block text-[10px] font-medium text-[#3b2f25]";
 
   function updateCustomer(field: keyof CustomerInfo, value: string) {
-    setCustomer((previous) => ({
-      ...previous,
-      [field]: value,
-    }));
+    setCustomer((previous) => ({ ...previous, [field]: value }));
   }
 
   function handlePlaceOrder(event: FormEvent<HTMLFormElement>) {
@@ -187,22 +182,14 @@ function Checkout() {
       return;
     }
 
-    // Sản phẩm có tùy chọn kích thước phải có kích thước hợp lệ.
     const invalidSize = cartProducts.some(({ product, size }) => {
-      if (!product.sizes?.length) {
-        return false;
-      }
-
-      if (!size) {
-        return true;
-      }
-
-      return !product.sizes.some((productSize) => productSize.label === size);
+      if (!product.sizes?.length) return false;
+      return !size || !product.sizes.some((option) => option.label === size);
     });
 
     if (invalidSize) {
       setError(
-        "Có sản phẩm chưa chọn kích thước hợp lệ. Vui lòng quay lại giỏ hàng hoặc trang sản phẩm để kiểm tra.",
+        "Có sản phẩm chưa chọn kích thước hợp lệ. Vui lòng quay lại giỏ hàng để kiểm tra.",
       );
       return;
     }
@@ -211,11 +198,12 @@ function Checkout() {
 
     try {
       const orderItems: OrderItem[] = cartProducts.map(
-        ({ product, size, quantity }) => ({
+        ({ product, size, quantity, unitPrice }) => ({
           productId: product.id,
           name: product.name,
           image: product.images[0] ?? "",
-          price: product.price,
+          // Lưu giá đơn vị đã áp dụng kích thước để lịch sử đơn hàng đúng giá.
+          price: unitPrice,
           quantity,
           ...(size ? { size } : {}),
         }),
@@ -233,52 +221,47 @@ function Checkout() {
         status: "Đã tiếp nhận",
       };
 
-      const savedOrders = readStorage<Order[]>(ORDERS_STORAGE_KEY, []);
-
+      const savedOrders = readStorage<unknown>(ORDERS_STORAGE_KEY, []);
       if (!Array.isArray(savedOrders)) {
         throw new Error("Không đọc được danh sách đơn hàng.");
       }
 
-      // Lưu đơn hàng mới lên đầu danh sách.
       localStorage.setItem(
         ORDERS_STORAGE_KEY,
         JSON.stringify([order, ...savedOrders]),
       );
       window.dispatchEvent(new Event("ordersUpdated"));
 
-      // Lưu thông tin mới để dùng cho lần thanh toán tiếp theo.
+      const oldProfile = readStorage<ProfileInfo>(PROFILE_STORAGE_KEY, {
+        fullName: "",
+        email: "",
+        phone: "",
+        birthday: "",
+      });
       localStorage.setItem(
         PROFILE_STORAGE_KEY,
         JSON.stringify({
-          ...readStorage<ProfileInfo>(PROFILE_STORAGE_KEY, {
-            fullName: "",
-            email: "",
-            phone: "",
-            birthday: "",
-          }),
+          ...oldProfile,
           fullName: customer.fullName,
           email: customer.email,
           phone: customer.phone,
         }),
       );
 
-      localStorage.setItem(
-        ADDRESS_STORAGE_KEY,
-        JSON.stringify({
-          recipient: customer.fullName,
-          phone: customer.phone,
-          city: customer.city,
-          district: customer.district,
-          ward: customer.ward,
-          address: customer.address,
-        }),
-      );
+      const addressToSave: AddressInfo = {
+        recipient: customer.fullName,
+        phone: customer.phone,
+        city: customer.city,
+        district: customer.district,
+        ward: customer.ward,
+        address: customer.address,
+      };
+      localStorage.setItem(ADDRESS_STORAGE_KEY, JSON.stringify(addressToSave));
 
-      // Xóa giỏ hàng sau khi đơn đã được lưu thành công.
+      // Chỉ xóa giỏ hàng sau khi đơn hàng đã được ghi thành công.
       localStorage.setItem(CART_STORAGE_KEY, JSON.stringify([]));
       setCartItems([]);
       window.dispatchEvent(new Event("cartUpdated"));
-
       setSuccessOrder(order);
     } catch {
       setError(
@@ -289,8 +272,6 @@ function Checkout() {
     }
   }
 
-  // EMPTY CART
-
   if (cartProducts.length === 0 && !successOrder) {
     return (
       <main className="min-h-[65vh] bg-[#f7f1ed] px-5 pb-16 pt-28">
@@ -298,11 +279,9 @@ function Checkout() {
           <h1 className="font-serif text-2xl font-semibold text-[#2d261f]">
             Giỏ hàng đang trống
           </h1>
-
           <p className="mt-3 text-xs leading-6 text-[#756b63]">
             Bạn cần có sản phẩm trong giỏ hàng trước khi tiến hành thanh toán.
           </p>
-
           <Link
             to="/products"
             className="mt-7 inline-flex bg-[#3b2f25] px-7 py-3 text-[10px] font-medium tracking-wide text-white transition hover:bg-[#594638]"
@@ -316,38 +295,28 @@ function Checkout() {
 
   return (
     <main className="min-h-screen bg-[#f7f1ed] pb-14 pt-[70px] md:pb-20">
-      {/* PAGE TITLE */}
-
       <section className="px-5 pb-5 pt-6 md:px-8 md:pb-7 md:pt-8">
         <div className="mx-auto max-w-6xl">
           <p className="text-[10px] tracking-[0.18em] text-[#8c7a69]">
             NESTA FURNITURE
           </p>
-
           <h1 className="mt-1 font-serif text-2xl font-semibold text-[#2d261f] md:text-3xl">
             THANH TOÁN
           </h1>
         </div>
       </section>
 
-      {/* CHECKOUT CONTENT */}
-
       <section className="px-5 md:px-8">
         <div className="mx-auto grid max-w-6xl items-start gap-7 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-10">
-          {/* LEFT: CUSTOMER FORM */}
-
           <form
             id="checkout-form"
             onSubmit={handlePlaceOrder}
             className="min-w-0 space-y-8"
           >
-            {/* SHIPPING */}
-
             <section>
               <h2 className="mb-4 text-xs font-semibold text-[#2d261f] md:text-sm">
                 ĐỊA CHỈ GIAO HÀNG
               </h2>
-
               <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
                 <div className="sm:col-span-2">
                   <label className={labelClass} htmlFor="fullName">
@@ -363,7 +332,6 @@ function Checkout() {
                     className={inputClass}
                   />
                 </div>
-
                 <div>
                   <label className={labelClass} htmlFor="phone">
                     Số điện thoại *
@@ -380,7 +348,6 @@ function Checkout() {
                     className={inputClass}
                   />
                 </div>
-
                 <div>
                   <label className={labelClass} htmlFor="email">
                     Địa chỉ email *
@@ -396,7 +363,6 @@ function Checkout() {
                     className={inputClass}
                   />
                 </div>
-
                 <div>
                   <label className={labelClass} htmlFor="city">
                     Tỉnh/Thành phố *
@@ -411,7 +377,6 @@ function Checkout() {
                     className={inputClass}
                   />
                 </div>
-
                 <div>
                   <label className={labelClass} htmlFor="district">
                     Quận/Huyện *
@@ -426,7 +391,6 @@ function Checkout() {
                     className={inputClass}
                   />
                 </div>
-
                 <div>
                   <label className={labelClass} htmlFor="ward">
                     Phường/Xã
@@ -440,7 +404,6 @@ function Checkout() {
                     className={inputClass}
                   />
                 </div>
-
                 <div>
                   <label className={labelClass} htmlFor="address">
                     Địa chỉ cụ thể *
@@ -458,20 +421,16 @@ function Checkout() {
               </div>
             </section>
 
-            {/* ORDER NOTE */}
-
             <section>
               <h2 className="mb-2 text-xs font-semibold text-[#2d261f]">
                 THÔNG TIN THÊM
               </h2>
-
               <label
                 htmlFor="note"
                 className="mb-2 block text-[10px] text-[#756b63]"
               >
                 Lưu ý cho đơn hàng (tùy chọn)
               </label>
-
               <textarea
                 id="note"
                 rows={3}
@@ -482,20 +441,13 @@ function Checkout() {
               />
             </section>
 
-            {/* PAYMENT */}
-
             <section>
               <h2 className="mb-4 text-xs font-semibold text-[#2d261f] md:text-sm">
                 PHƯƠNG THỨC THANH TOÁN
               </h2>
-
               <div className="grid gap-3 sm:grid-cols-2">
                 <label
-                  className={`flex min-h-[66px] cursor-pointer items-center gap-3 border p-4 transition ${
-                    paymentMethod === "cod"
-                      ? "border-[#3b2f25] bg-[#f3ece6]"
-                      : "border-[#d8d0c8] bg-white hover:border-[#a99a8d]"
-                  }`}
+                  className={`flex min-h-[66px] cursor-pointer items-center gap-3 border p-4 transition ${paymentMethod === "cod" ? "border-[#3b2f25] bg-[#f3ece6]" : "border-[#d8d0c8] bg-white hover:border-[#a99a8d]"}`}
                 >
                   <input
                     type="radio"
@@ -505,7 +457,6 @@ function Checkout() {
                     onChange={() => setPaymentMethod("cod")}
                     className="accent-[#3b2f25]"
                   />
-
                   <span className="text-[11px] text-[#3b2f25]">
                     <span className="block font-medium">
                       Thanh toán khi nhận hàng
@@ -515,13 +466,8 @@ function Checkout() {
                     </span>
                   </span>
                 </label>
-
                 <label
-                  className={`flex min-h-[66px] cursor-pointer items-center gap-3 border p-4 transition ${
-                    paymentMethod === "bank"
-                      ? "border-[#3b2f25] bg-[#f3ece6]"
-                      : "border-[#d8d0c8] bg-white hover:border-[#a99a8d]"
-                  }`}
+                  className={`flex min-h-[66px] cursor-pointer items-center gap-3 border p-4 transition ${paymentMethod === "bank" ? "border-[#3b2f25] bg-[#f3ece6]" : "border-[#d8d0c8] bg-white hover:border-[#a99a8d]"}`}
                 >
                   <input
                     type="radio"
@@ -531,7 +477,6 @@ function Checkout() {
                     onChange={() => setPaymentMethod("bank")}
                     className="accent-[#3b2f25]"
                   />
-
                   <span className="text-[11px] text-[#3b2f25]">
                     <span className="block font-medium">
                       Chuyển khoản ngân hàng
@@ -545,17 +490,12 @@ function Checkout() {
             </section>
           </form>
 
-          {/* RIGHT: ORDER SUMMARY */}
-
           <aside className="h-fit border border-[#d5ccc4] bg-white p-4 md:p-5 lg:sticky lg:top-24">
             <h2 className="border-b border-[#e4dcd5] pb-3 text-xs font-semibold text-[#2d261f] md:text-sm">
               TÓM TẮT ĐƠN HÀNG
             </h2>
-
-            {/* PRODUCTS */}
-
             <div className="divide-y divide-[#e2d9d1]">
-              {cartProducts.map(({ product, size, quantity }) => (
+              {cartProducts.map(({ product, size, quantity, unitPrice }) => (
                 <div
                   key={`${product.id}-${size ?? "default"}`}
                   className="flex gap-3 py-4"
@@ -565,12 +505,11 @@ function Checkout() {
                     className="h-[58px] w-[58px] shrink-0 overflow-hidden bg-[#f2ece6]"
                   >
                     <img
-                      src={product.images[0]}
+                      src={product.images[0] ?? ""}
                       alt={product.name}
                       className="h-full w-full object-cover"
                     />
                   </Link>
-
                   <div className="min-w-0 flex-1">
                     <Link
                       to={`/products/${product.id}`}
@@ -578,41 +517,36 @@ function Checkout() {
                     >
                       {product.name} × {quantity}
                     </Link>
-
                     {size && (
                       <p className="mt-1 text-[9px] text-[#756b63]">
                         Kích thước: {size}
                       </p>
                     )}
-
                     <p className="mt-2 text-[10px] font-medium text-[#3b2f25]">
-                      {formatPrice(product.price * quantity)} VNĐ
+                      {formatPrice(unitPrice * quantity)} VNĐ
+                    </p>
+                    <p className="mt-1 text-[9px] text-[#756b63]">
+                      Đơn giá: {formatPrice(unitPrice)} VNĐ
                     </p>
                   </div>
                 </div>
               ))}
             </div>
 
-            {/* PRICE BREAKDOWN */}
-
             <div className="space-y-3 border-t border-[#d5ccc4] pt-4 text-[10px] text-[#51463d]">
               <div className="flex items-center justify-between gap-3">
                 <span>Tạm tính</span>
                 <span>{formatPrice(subtotal)} VNĐ</span>
               </div>
-
               <div className="flex items-center justify-between gap-3">
                 <span>Vận chuyển</span>
                 <span>{formatPrice(shipping)} VNĐ</span>
               </div>
-
               <div className="flex items-center justify-between gap-3 border-t border-[#e4dcd5] pt-3 text-xs font-semibold text-[#2d261f]">
                 <span>TỔNG CỘNG</span>
                 <span>{formatPrice(total)} VNĐ</span>
               </div>
             </div>
-
-            {/* TERMS */}
 
             <label className="mt-5 flex cursor-pointer items-start gap-2 text-[9px] leading-4 text-[#756b63]">
               <input
@@ -621,12 +555,10 @@ function Checkout() {
                 onChange={(e) => setAcceptedTerms(e.target.checked)}
                 className="mt-0.5 accent-[#3b2f25]"
               />
-
               <span>
                 Tôi đã đọc và đồng ý với các điều khoản, điều kiện của cửa hàng.
               </span>
             </label>
-
             {error && (
               <p
                 role="alert"
@@ -635,9 +567,6 @@ function Checkout() {
                 {error}
               </p>
             )}
-
-            {/* SUBMIT */}
-
             <button
               type="submit"
               form="checkout-form"
@@ -646,7 +575,6 @@ function Checkout() {
             >
               {isSubmitting ? "ĐANG XỬ LÝ..." : "ĐẶT MUA"}
             </button>
-
             <Link
               to="/cart"
               className="mt-3 block text-center text-[10px] text-[#756b63] underline underline-offset-4 transition hover:text-[#3b2f25]"
@@ -656,8 +584,6 @@ function Checkout() {
           </aside>
         </div>
       </section>
-
-      {/* ORDER SUCCESS MODAL */}
 
       {successOrder && (
         <div
@@ -670,23 +596,19 @@ function Checkout() {
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[#c9d9c5] bg-[#f2f7f0] text-2xl text-[#45613f]">
               ✓
             </div>
-
             <p className="mt-5 text-[10px] tracking-[0.2em] text-[#8c7a69]">
               NESTA FURNITURE
             </p>
-
             <h2
               id="order-success-title"
               className="mt-2 font-serif text-2xl font-semibold text-[#2d261f]"
             >
               Đặt hàng thành công!
             </h2>
-
             <p className="mt-3 text-xs leading-6 text-[#756b63]">
               Cảm ơn bạn đã tin tưởng và lựa chọn NESTA. Đơn hàng của bạn đã
               được ghi nhận.
             </p>
-
             <div className="mt-5 border-y border-[#e4dcd5] py-4 text-left text-xs">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[#756b63]">Mã đơn hàng</span>
@@ -694,7 +616,6 @@ function Checkout() {
                   {successOrder.id}
                 </span>
               </div>
-
               <div className="mt-3 flex items-center justify-between gap-3">
                 <span className="text-[#756b63]">Tổng thanh toán</span>
                 <span className="font-semibold text-[#3b2f25]">
@@ -702,7 +623,6 @@ function Checkout() {
                 </span>
               </div>
             </div>
-
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <Link
                 to="/profile"
@@ -710,7 +630,6 @@ function Checkout() {
               >
                 XEM ĐƠN HÀNG
               </Link>
-
               <Link
                 to="/"
                 className="flex min-h-10 items-center justify-center border border-[#3b2f25] px-3 py-3 text-[10px] font-medium tracking-wide text-[#3b2f25] transition hover:bg-[#f3ece6]"

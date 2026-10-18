@@ -3,9 +3,10 @@ import { Link } from "react-router-dom";
 
 import banner from "../../assets/banner.jpg";
 import deleteIcon from "../../assets/Delete.svg";
-import { products, type Product } from "../../data/products";
+import { getSizePrice, products, type Product } from "../../data/products";
 
 const CART_STORAGE_KEY = "nesta-cart";
+const SHIPPING_FEE = 30_000;
 
 type CartItem = {
   productId: number;
@@ -17,7 +18,88 @@ type CartProduct = {
   product: Product;
   size?: string;
   quantity: number;
+  unitPrice: number;
 };
+
+function formatPrice(price: number) {
+  return new Intl.NumberFormat("vi-VN").format(price);
+}
+
+// =========================================================
+// READ CART
+// =========================================================
+
+function readCart(): CartItem[] {
+  const savedCart = localStorage.getItem(CART_STORAGE_KEY);
+
+  if (!savedCart) {
+    return [];
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(savedCart);
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.flatMap((value: unknown): CartItem[] => {
+      if (typeof value !== "object" || value === null) {
+        return [];
+      }
+
+      const item = value as Record<string, unknown>;
+
+      if (
+        typeof item.productId !== "number" ||
+        !Number.isInteger(item.productId) ||
+        typeof item.quantity !== "number" ||
+        !Number.isFinite(item.quantity) ||
+        item.quantity < 1
+      ) {
+        return [];
+      }
+
+      return [
+        {
+          productId: item.productId,
+          quantity: Math.floor(item.quantity),
+          size: typeof item.size === "string" ? item.size : undefined,
+        },
+      ];
+    });
+  } catch {
+    return [];
+  }
+}
+
+// =========================================================
+// CART HERO
+// =========================================================
+
+function CartHero() {
+  return (
+    <section className="relative h-[190px] overflow-hidden md:h-[210px]">
+      <img
+        src={banner}
+        alt="NESTA - Giỏ hàng"
+        className="h-full w-full object-cover"
+      />
+
+      <div className="absolute inset-0 bg-black/35" />
+
+      <div className="absolute inset-0 flex items-center justify-center">
+        <h1 className="font-serif text-3xl font-semibold tracking-wide text-white md:text-4xl">
+          GIỎ HÀNG
+        </h1>
+      </div>
+    </section>
+  );
+}
+
+// =========================================================
+// CART COMPONENT
+// =========================================================
 
 function Cart() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -28,66 +110,17 @@ function Cart() {
 
   useEffect(() => {
     function loadCart() {
-      const savedCart = localStorage.getItem(CART_STORAGE_KEY);
-
-      if (!savedCart) {
-        setCartItems([]);
-        return;
-      }
-
-      try {
-        const parsed: unknown = JSON.parse(savedCart);
-
-        if (!Array.isArray(parsed)) {
-          setCartItems([]);
-          return;
-        }
-
-        const validItems: CartItem[] = [];
-
-        parsed.forEach((item: unknown) => {
-          if (
-            typeof item !== "object" ||
-            item === null ||
-            !("productId" in item) ||
-            !("quantity" in item)
-          ) {
-            return;
-          }
-
-          const cartItem = item as {
-            productId?: unknown;
-            size?: unknown;
-            quantity?: unknown;
-          };
-
-          if (
-            typeof cartItem.productId !== "number" ||
-            typeof cartItem.quantity !== "number" ||
-            cartItem.quantity <= 0
-          ) {
-            return;
-          }
-
-          validItems.push({
-            productId: cartItem.productId,
-            quantity: cartItem.quantity,
-            size: typeof cartItem.size === "string" ? cartItem.size : undefined,
-          });
-        });
-
-        setCartItems(validItems);
-      } catch {
-        setCartItems([]);
-      }
+      setCartItems(readCart());
     }
 
     loadCart();
 
     window.addEventListener("cartUpdated", loadCart);
+    window.addEventListener("storage", loadCart);
 
     return () => {
       window.removeEventListener("cartUpdated", loadCart);
+      window.removeEventListener("storage", loadCart);
     };
   }, []);
 
@@ -112,7 +145,7 @@ function Cart() {
   }
 
   // =========================================================
-  // INCREASE
+  // INCREASE QUANTITY
   // =========================================================
 
   function increaseQuantity(productId: number, size?: string) {
@@ -131,7 +164,7 @@ function Cart() {
   }
 
   // =========================================================
-  // DECREASE
+  // DECREASE QUANTITY
   // =========================================================
 
   function decreaseQuantity(productId: number, size?: string) {
@@ -152,7 +185,7 @@ function Cart() {
   }
 
   // =========================================================
-  // REMOVE
+  // REMOVE ITEM
   // =========================================================
 
   function removeItem(productId: number, size?: string) {
@@ -168,37 +201,57 @@ function Cart() {
   // =========================================================
 
   const cartProducts: CartProduct[] = cartItems.flatMap((item) => {
-    const product = products.find((product) => product.id === item.productId);
+    const product = products.find(
+      (candidate) => candidate.id === item.productId,
+    );
 
     if (!product) {
       return [];
     }
+
+    const selectedSize = product.sizes?.find(
+      (sizeOption) => sizeOption.label === item.size,
+    );
+
+    // Nếu size đã lưu không còn hợp lệ, không tự ý lấy
+    // giá của một kích thước khác.
+    const hasSizeOptions = Boolean(product.sizes?.length);
+
+    const hasInvalidSavedSize = Boolean(
+      item.size && hasSizeOptions && !selectedSize,
+    );
+
+    const unitPrice = hasInvalidSavedSize
+      ? product.price
+      : getSizePrice(product, selectedSize);
 
     return [
       {
         product,
         size: item.size,
         quantity: item.quantity,
+        unitPrice,
       },
     ];
   });
 
   // =========================================================
-  // PRICE
+  // PRICE SUMMARY
   // =========================================================
 
   const subtotal = cartProducts.reduce(
-    (total, item) => total + item.product.price * item.quantity,
+    (sum, item) => sum + item.unitPrice * item.quantity,
     0,
   );
 
-  const shipping = cartProducts.length > 0 ? 30000 : 0;
+  const totalQuantity = cartProducts.reduce(
+    (sum, item) => sum + item.quantity,
+    0,
+  );
+
+  const shipping = cartProducts.length > 0 ? SHIPPING_FEE : 0;
 
   const total = subtotal + shipping;
-
-  function formatPrice(price: number) {
-    return new Intl.NumberFormat("vi-VN").format(price);
-  }
 
   // =========================================================
   // EMPTY CART
@@ -207,33 +260,14 @@ function Cart() {
   if (cartProducts.length === 0) {
     return (
       <div className="min-h-screen bg-[#f7f1ed]">
-        {/* =====================================================
-            HERO
-        ====================================================== */}
-
-        <section className="relative h-[190px] overflow-hidden md:h-[210px]">
-          <img
-            src={banner}
-            alt="NESTA"
-            className="h-full w-full object-cover"
-          />
-
-          <div className="absolute inset-0 bg-black/35" />
-
-          <div className="absolute inset-0 flex items-center justify-center">
-            <h1 className="font-serif text-3xl font-semibold tracking-wide text-white md:text-4xl">
-              GIỎ HÀNG
-            </h1>
-          </div>
-        </section>
-
-        {/* =====================================================
-            EMPTY
-        ====================================================== */}
+        <CartHero />
 
         <section className="px-5 py-20 md:py-24">
           <div className="mx-auto max-w-5xl text-center">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-[#d8d0c8] text-2xl text-[#6f6257]">
+            <div
+              aria-hidden="true"
+              className="mx-auto flex h-16 w-16 items-center justify-center rounded-full border border-[#d8d0c8] text-2xl text-[#6f6257]"
+            >
               🛒
             </div>
 
@@ -278,36 +312,12 @@ function Cart() {
 
   return (
     <div className="min-h-screen bg-[#f7f1ed]">
-      {/* =====================================================
-          HERO
-      ====================================================== */}
-
-      <section className="relative h-[190px] overflow-hidden md:h-[210px]">
-        <img
-          src={banner}
-          alt="NESTA - Giỏ hàng"
-          className="h-full w-full object-cover"
-        />
-
-        <div className="absolute inset-0 bg-black/35" />
-
-        <div className="absolute inset-0 flex items-center justify-center">
-          <h1 className="font-serif text-3xl font-semibold tracking-wide text-white md:text-4xl">
-            GIỎ HÀNG
-          </h1>
-        </div>
-      </section>
-
-      {/* =====================================================
-          CONTENT
-      ====================================================== */}
+      <CartHero />
 
       <section className="px-5 py-10 md:px-8 md:py-14">
         <div className="mx-auto max-w-6xl">
           <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
-            {/* =================================================
-                LEFT - CART ITEMS
-            ================================================== */}
+            {/* LEFT - CART ITEMS */}
 
             <div>
               <div className="mb-4 flex items-center justify-between border-b border-[#cfc6be] pb-3">
@@ -316,12 +326,17 @@ function Cart() {
                 </h2>
 
                 <span className="text-xs text-[#756b63]">
-                  {cartProducts.length} sản phẩm
+                  {totalQuantity} sản phẩm
                 </span>
               </div>
 
               <div>
-                {cartProducts.map(function ({ product, size, quantity }) {
+                {cartProducts.map(function ({
+                  product,
+                  size,
+                  quantity,
+                  unitPrice,
+                }) {
                   return (
                     <article
                       key={`${product.id}-${size ?? "default"}`}
@@ -335,9 +350,7 @@ function Cart() {
                         md:gap-5
                       "
                     >
-                      {/* =================================================
-                          IMAGE
-                      ================================================== */}
+                      {/* IMAGE */}
 
                       <Link
                         to={`/products/${product.id}`}
@@ -359,12 +372,10 @@ function Cart() {
                         />
                       </Link>
 
-                      {/* =================================================
-                          PRODUCT INFO
-                      ================================================== */}
+                      {/* PRODUCT INFO */}
 
-                      <div className="flex min-w-0 flex-1 items-center gap-4 relative">
-                        <div className="min-w-0 flex-1 pr-2">
+                      <div className="relative flex min-w-0 flex-1 items-center gap-4">
+                        <div className="min-w-0 flex-1 pr-8 sm:pr-2">
                           <Link
                             to={`/products/${product.id}`}
                             className="
@@ -395,15 +406,20 @@ function Cart() {
                           )}
 
                           <p className="mt-1 text-[10px] font-medium text-[#3b2f25] md:text-xs">
-                            {formatPrice(product.price)} VNĐ
+                            {formatPrice(unitPrice)} VNĐ
+                          </p>
+
+                          <p className="mt-1 text-[10px] text-[#756b63] md:text-xs">
+                            Thành tiền:{" "}
+                            <span className="font-semibold text-[#3b2f25]">
+                              {formatPrice(unitPrice * quantity)} VNĐ
+                            </span>
                           </p>
                         </div>
 
-                        {/* =================================================
-                            QUANTITY - BÊN PHẢI
-                        ================================================== */}
+                        {/* QUANTITY */}
 
-                        <div className="flex shrink-0 items-center border border-[#bdb4ac] bg-white absolute right-0 bottom-0 rounded">
+                        <div className="absolute bottom-0 right-0 flex shrink-0 items-center rounded border border-[#bdb4ac] bg-white">
                           <button
                             type="button"
                             onClick={() => decreaseQuantity(product.id, size)}
@@ -418,7 +434,7 @@ function Cart() {
                               transition
                               hover:bg-[#eee8e3]
                             "
-                            aria-label="Giảm số lượng"
+                            aria-label={`Giảm số lượng ${product.name}`}
                           >
                             −
                           </button>
@@ -436,6 +452,7 @@ function Cart() {
                               text-[11px]
                               text-[#2d261f]
                             "
+                            aria-live="polite"
                           >
                             {quantity}
                           </span>
@@ -454,16 +471,14 @@ function Cart() {
                               transition
                               hover:bg-[#eee8e3]
                             "
-                            aria-label="Tăng số lượng"
+                            aria-label={`Tăng số lượng ${product.name}`}
                           >
                             +
                           </button>
                         </div>
                       </div>
 
-                      {/* =================================================
-                          REMOVE
-                      ================================================== */}
+                      {/* REMOVE */}
 
                       <button
                         type="button"
@@ -482,7 +497,7 @@ function Cart() {
                           transition
                           hover:opacity-100
                         "
-                        aria-label={`Xóa ${product.name}`}
+                        aria-label={`Xóa ${product.name} khỏi giỏ hàng`}
                       >
                         <img
                           src={deleteIcon}
@@ -496,18 +511,14 @@ function Cart() {
               </div>
             </div>
 
-            {/* =================================================
-                RIGHT - ORDER SUMMARY
-            ================================================== */}
+            {/* RIGHT - ORDER SUMMARY */}
 
             <aside className="border border-[#d5ccc4] bg-white p-5 md:p-6">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-[#2d261f]">
                 Tóm tắt đơn hàng
               </h2>
 
-              {/* =================================================
-                  PRICE
-              ================================================== */}
+              {/* PRICE */}
 
               <div className="mt-5 space-y-3 text-[11px] text-[#4d443d]">
                 <div className="flex items-center justify-between gap-4">
@@ -527,19 +538,22 @@ function Cart() {
                 </div>
               </div>
 
-              {/* =================================================
-                  PROMOTION
-              ================================================== */}
+              {/* PROMOTION */}
 
               <div className="mt-5 border-t border-[#e1dad3] pt-5">
-                <p className="mb-2 text-[10px] font-medium text-[#3b2f25]">
+                <label
+                  htmlFor="cart-promo-code"
+                  className="mb-2 block text-[10px] font-medium text-[#3b2f25]"
+                >
                   Mã giảm giá
-                </p>
+                </label>
 
                 <div className="flex h-8">
                   <input
+                    id="cart-promo-code"
                     type="text"
                     placeholder="Nhập mã giảm giá"
+                    disabled
                     className="
                       min-w-0
                       flex-1
@@ -551,12 +565,13 @@ function Cart() {
                       text-[#3b2f25]
                       outline-none
                       placeholder:text-[#aaa09a]
-                      focus:border-[#8c7a69]
+                      disabled:cursor-not-allowed
                     "
                   />
 
                   <button
                     type="button"
+                    disabled
                     className="
                       w-[70px]
                       shrink-0
@@ -566,18 +581,19 @@ function Cart() {
                       uppercase
                       tracking-wide
                       text-white
-                      transition
-                      hover:bg-[#594638]
+                      opacity-60
                     "
                   >
                     Sử dụng
                   </button>
                 </div>
+
+                <p className="mt-2 text-[10px] leading-relaxed text-[#81766e]">
+                  Chức năng mã giảm giá chưa được kích hoạt.
+                </p>
               </div>
 
-              {/* =================================================
-                  TOTAL
-              ================================================== */}
+              {/* TOTAL */}
 
               <div className="mt-5 border-t border-[#d5ccc4] pt-4">
                 <div className="flex items-center justify-between gap-4">
@@ -596,9 +612,7 @@ function Cart() {
                 </p>
               </div>
 
-              {/* =================================================
-                  ACTIONS
-              ================================================== */}
+              {/* ACTIONS */}
 
               <div className="mt-5 grid grid-cols-2 gap-2">
                 <Link

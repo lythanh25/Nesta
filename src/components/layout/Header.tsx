@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import searchIcon from "../../assets/search.svg";
@@ -21,10 +21,35 @@ type CategoryMenu = {
  */
 function normalizeText(value: string): string {
   return value
+    .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
+    .replace(/đ/g, "d")
     .trim();
+}
+
+/**
+ * Tìm theo từ trong tên, danh mục và danh mục con.
+ * Từ ngắn (1-2 ký tự) phải khớp nguyên từ: "tủ" không khớp "tượng".
+ * Từ >= 3 ký tự có thể khớp đầu từ để hỗ trợ gợi ý khi đang gõ.
+ */
+function matchesKeyword(text: string, search: string): boolean {
+  const words = normalizeText(text)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+  const searchWords = normalizeText(search)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+
+  if (searchWords.length === 0) return false;
+
+  return searchWords.every((searchWord) =>
+    words.some(
+      (word) =>
+        word === searchWord ||
+        (searchWord.length >= 3 && word.startsWith(searchWord)),
+    ),
+  );
 }
 
 /**
@@ -70,6 +95,232 @@ const productMenu: CategoryMenu[] = Array.from(
   };
 });
 
+// Search
+
+type SearchSuggestionsProps = {
+  query: string;
+  onSelect: () => void;
+};
+
+function SearchSuggestions({ query, onSelect }: SearchSuggestionsProps) {
+  const navigate = useNavigate();
+  const keyword = normalizeText(query);
+
+  const results = useMemo(() => {
+    if (!keyword) {
+      return { categories: [], subcategories: [], products: [] };
+    }
+
+    // Chỉ tìm trên tên và danh mục; không tìm trong mô tả dài.
+    const matchedProducts = products.filter((product) => {
+      const searchableText = [
+        product.name,
+        product.category,
+        product.subcategory,
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      return matchesKeyword(searchableText, keyword);
+    });
+
+    const matchedCategories = Array.from(
+      new Set(
+        products
+          .map((product) => product.category)
+          .filter((category) => matchesKeyword(category, keyword)),
+      ),
+    );
+
+    const matchedSubcategories = Array.from(
+      new Map(
+        products
+          .filter(
+            (product) =>
+              product.subcategory &&
+              matchesKeyword(product.subcategory, keyword),
+          )
+          .map((product) => [
+            `${product.category}|${product.subcategory}`,
+            {
+              category: product.category,
+              subcategory: product.subcategory,
+            },
+          ]),
+      ).values(),
+    );
+
+    return {
+      categories: matchedCategories,
+      subcategories: matchedSubcategories,
+      products: matchedProducts.slice(0, 5),
+    };
+  }, [keyword]);
+
+  function goToSearch() {
+    navigate(`/products?search=${encodeURIComponent(query.trim())}`);
+    onSelect();
+  }
+
+  function goToCategory(category: string) {
+    navigate(`/products?category=${encodeURIComponent(category)}`);
+    onSelect();
+  }
+
+  function goToSubcategory(category: string, subcategory: string) {
+    navigate(
+      `/products?category=${encodeURIComponent(category)}&subcategory=${encodeURIComponent(subcategory)}`,
+    );
+    onSelect();
+  }
+
+  function goToProduct(productId: number) {
+    navigate(`/products/${productId}`);
+    onSelect();
+  }
+
+  const hasResults =
+    results.categories.length > 0 ||
+    results.subcategories.length > 0 ||
+    results.products.length > 0;
+
+  if (!keyword) return null;
+
+  return (
+    <div
+      className="absolute left-0 right-0 top-full z-[100] mt-2
+        max-h-[min(70vh,520px)] overflow-y-auto rounded-md
+        border border-[#E5E0DA] bg-white text-[#2D261F]
+        shadow-xl"
+    >
+      {!hasResults ? (
+        <div className="px-4 py-6 text-center">
+          <p className="text-sm font-medium">Không tìm thấy kết quả phù hợp</p>
+          <p className="mt-1 text-xs text-[#756D66]">
+            Thử tên sản phẩm hoặc danh mục khác nhé.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* DANH MỤC */}
+          {(results.categories.length > 0 ||
+            results.subcategories.length > 0) && (
+            <section className="p-3">
+              <p
+                className="mb-2 px-1 text-[11px] font-semibold
+                uppercase tracking-wider text-[#8A7A6D]"
+              >
+                Danh mục phù hợp
+              </p>
+
+              <div className="space-y-1">
+                {results.categories.map((category) => (
+                  <button
+                    key={`category-${category}`}
+                    type="button"
+                    onClick={() => goToCategory(category)}
+                    className="flex w-full items-center justify-between
+                      rounded px-2 py-2 text-left text-sm
+                      transition-colors hover:bg-[#F7F5F2]"
+                  >
+                    <span>{category}</span>
+                    <span className="text-xs text-[#8A7A6D]">Danh mục →</span>
+                  </button>
+                ))}
+
+                {results.subcategories.map((item) => (
+                  <button
+                    key={`${item.category}-${item.subcategory}`}
+                    type="button"
+                    onClick={() =>
+                      goToSubcategory(item.category, item.subcategory)
+                    }
+                    className="flex w-full items-center justify-between
+                      rounded px-2 py-2 text-left text-sm
+                      transition-colors hover:bg-[#F7F5F2]"
+                  >
+                    <span>{item.subcategory}</span>
+                    <span className="ml-2 shrink-0 text-xs text-[#8A7A6D]">
+                      {item.category}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* SẢN PHẨM */}
+          {results.products.length > 0 && (
+            <section className="border-t border-[#E5E0DA] p-3">
+              <p
+                className="mb-2 px-1 text-[11px] font-semibold
+                uppercase tracking-wider text-[#8A7A6D]"
+              >
+                Sản phẩm gợi ý
+              </p>
+
+              <div className="space-y-1">
+                {results.products.map((product) => (
+                  <button
+                    key={product.id}
+                    type="button"
+                    onClick={() => goToProduct(product.id)}
+                    className="flex w-full items-center gap-3
+                      rounded-md p-2 text-left transition-colors
+                      hover:bg-[#F7F5F2]"
+                  >
+                    <img
+                      src={product.images[0]}
+                      alt={product.name}
+                      className="h-14 w-14 shrink-0 rounded-sm
+                        bg-[#F7F5F2] object-cover"
+                      loading="lazy"
+                    />
+
+                    <span className="min-w-0 flex-1">
+                      <span
+                        className="block line-clamp-2 text-sm
+                        font-medium text-[#2D261F]"
+                      >
+                        {product.name}
+                      </span>
+
+                      <span className="mt-1 block text-xs text-[#756D66]">
+                        {product.category}
+                        {product.subcategory ? ` · ${product.subcategory}` : ""}
+                      </span>
+
+                      <span
+                        className="mt-1 block text-sm font-semibold
+                        text-[#5A493D]"
+                      >
+                        {product.price.toLocaleString("vi-VN")} ₫
+                      </span>
+                    </span>
+
+                    <span className="shrink-0 text-[#8A7A6D]">→</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* XEM TẤT CẢ */}
+          <button
+            type="button"
+            onClick={goToSearch}
+            className="w-full border-t border-[#E5E0DA] px-4 py-3
+              text-center text-sm font-medium text-[#5A493D]
+              transition-colors hover:bg-[#F7F5F2]"
+          >
+            Xem tất cả kết quả cho “{query.trim()}” →
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 function Header() {
   const navigate = useNavigate();
 
@@ -77,6 +328,57 @@ function Header() {
   const [isProductOpen, setIsProductOpen] = useState(false);
   const [openCategory, setOpenCategory] = useState<string | null>(null);
   const [searchValue, setSearchValue] = useState("");
+
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchContainerRef = useRef<HTMLDivElement>(null);
+
+  //Badge
+  const [cartCount, setCartCount] = useState(0);
+
+  useEffect(() => {
+    function updateCartCount() {
+      try {
+        const savedCart = localStorage.getItem("nesta-cart");
+        const cartItems: unknown = savedCart ? JSON.parse(savedCart) : [];
+
+        if (!Array.isArray(cartItems)) {
+          setCartCount(0);
+          return;
+        }
+
+        // Đếm số productId khác nhau, không cộng quantity.
+        const uniqueProducts = new Set<string>();
+
+        cartItems.forEach((item) => {
+          if (
+            item &&
+            typeof item === "object" &&
+            "productId" in item &&
+            typeof item.productId === "number"
+          ) {
+            const size =
+              "size" in item && typeof item.size === "string" ? item.size : "";
+
+            uniqueProducts.add(`${item.productId}-${size}`);
+          }
+        });
+
+        setCartCount(uniqueProducts.size);
+      } catch {
+        setCartCount(0);
+      }
+    }
+
+    updateCartCount();
+
+    window.addEventListener("cartUpdated", updateCartCount);
+    window.addEventListener("storage", updateCartCount);
+
+    return () => {
+      window.removeEventListener("cartUpdated", updateCartCount);
+      window.removeEventListener("storage", updateCartCount);
+    };
+  }, []);
 
   /**
    * Tính số lượng category.
@@ -107,9 +409,33 @@ function Header() {
     setOpenCategory(null);
   }
 
+  // Đóng gợi ý khi bấm ra ngoài hoặc nhấn Escape.
+  useEffect(() => {
+    function handleOutsideClick(event: MouseEvent) {
+      if (
+        searchContainerRef.current &&
+        !searchContainerRef.current.contains(event.target as Node)
+      ) {
+        setIsSearchOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleOutsideClick);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, []);
+
   function handleSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Enter") {
+      event.preventDefault();
       handleSearch();
+      setIsSearchOpen(false);
+    }
+
+    if (event.key === "Escape") {
+      setIsSearchOpen(false);
     }
   }
 
@@ -379,24 +705,48 @@ function Header() {
             RIGHT ACTIONS
         ====================================================== */}
         <div className="flex items-center justify-self-end gap-3">
-          {/* Search */}
-          <div className="flex h-9 w-[230px] items-center overflow-hidden rounded border border-white/50 bg-white/10">
+          {/* Search desktop */}
+          <div
+            ref={searchContainerRef}
+            className="relative flex h-9 w-[230px] items-center
+            overflow-visible rounded border border-white/50 bg-white/10"
+          >
             <input
               type="text"
               value={searchValue}
-              onChange={function (event) {
+              onChange={(event) => {
                 setSearchValue(event.target.value);
+                setIsSearchOpen(true);
               }}
+              onFocus={() => setIsSearchOpen(true)}
               onKeyDown={handleSearchKeyDown}
               placeholder="Tìm kiếm sản phẩm..."
-              className="min-w-0 flex-1 bg-transparent px-3 text-xs text-white outline-none placeholder:text-white/60"
+              className="min-w-0 flex-1 bg-transparent px-3 text-xs
+      text-white outline-none placeholder:text-white/60"
               aria-label="Tìm kiếm sản phẩm"
+              aria-expanded={isSearchOpen && Boolean(searchValue.trim())}
             />
+
+            {searchValue && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchValue("");
+                  setIsSearchOpen(false);
+                }}
+                className="flex h-full w-6 shrink-0 items-center
+        justify-center text-white/70 hover:text-white"
+                aria-label="Xóa nội dung tìm kiếm"
+              >
+                ×
+              </button>
+            )}
 
             <button
               type="button"
               onClick={handleSearch}
-              className="flex h-full w-9 shrink-0 items-center justify-center transition-colors hover:bg-white/10"
+              className="flex h-full w-9 shrink-0 items-center
+      justify-center transition-colors hover:bg-white/10"
               aria-label="Tìm kiếm"
             >
               <img
@@ -405,19 +755,39 @@ function Header() {
                 className="h-4 w-4 brightness-0 invert"
               />
             </button>
+
+            {isSearchOpen && searchValue.trim() && (
+              <SearchSuggestions
+                query={searchValue}
+                onSelect={() => setIsSearchOpen(false)}
+              />
+            )}
           </div>
 
-          {/* Cart */}
+          {/* Cart desktop */}
           <Link
             to="/cart"
-            className="flex h-9 w-9 items-center justify-center transition-opacity hover:opacity-70"
-            aria-label="Giỏ hàng"
+            className="relative flex h-9 w-9 items-center justify-center
+    transition-opacity hover:opacity-80"
+            aria-label={`Giỏ hàng, ${cartCount} sản phẩm khác nhau`}
           >
             <img
               src={cartIcon}
               alt=""
               className="h-5 w-5 brightness-0 invert"
             />
+
+            {cartCount > 0 && (
+              <span
+                className="absolute -right-0.5 -top-0.5
+        flex h-[18px] min-w-[18px] items-center
+        justify-center rounded-full bg-red-600
+        px-1 text-[10px] font-bold leading-none text-white
+        ring-1 ring-[#3B2F25]"
+              >
+                {cartCount > 99 ? "99+" : cartCount}
+              </span>
+            )}
           </Link>
 
           {/* Account */}
@@ -501,17 +871,30 @@ function Header() {
             />
           </button>
 
+          {/* Cart mobile */}
           <Link
             to="/cart"
             onClick={closeMobileMenu}
-            className="flex h-10 w-10 items-center justify-center"
-            aria-label="Giỏ hàng"
+            className="relative flex h-10 w-10 items-center justify-center"
+            aria-label={`Giỏ hàng, ${cartCount} sản phẩm khác nhau`}
           >
             <img
               src={cartIcon}
               alt=""
               className="h-5 w-5 brightness-0 invert"
             />
+
+            {cartCount > 0 && (
+              <span
+                className="absolute right-0.5 top-0.5
+        flex h-[18px] min-w-[18px] items-center
+        justify-center rounded-full bg-red-600
+        px-1 text-[10px] font-bold leading-none text-white
+        ring-1 ring-[#3B2F25]"
+              >
+                {cartCount > 99 ? "99+" : cartCount}
+              </span>
+            )}
           </Link>
         </div>
       </div>
@@ -522,25 +905,32 @@ function Header() {
       {isMenuOpen && (
         <div className="absolute left-0 top-[70px] w-full border-t border-white/10 bg-[#3B2F25] lg:hidden">
           <div className="max-h-[calc(100vh-70px)] overflow-y-auto px-5 pb-8">
-            {/* Search */}
+            {/* Search mobile */}
             <div className="border-b border-white/10 py-5">
-              <div className="flex h-10 overflow-hidden rounded border border-white/40 bg-white/10">
+              <div
+                ref={searchContainerRef}
+                className="relative flex h-10 items-center
+      rounded border border-white/40 bg-white/10"
+              >
                 <input
                   type="text"
                   value={searchValue}
-                  onChange={function (event) {
+                  onChange={(event) => {
                     setSearchValue(event.target.value);
+                    setIsSearchOpen(true);
                   }}
+                  onFocus={() => setIsSearchOpen(true)}
                   onKeyDown={handleSearchKeyDown}
                   placeholder="Tìm kiếm sản phẩm..."
-                  className="min-w-0 flex-1 bg-transparent px-3 text-sm text-white outline-none placeholder:text-white/60"
+                  className="min-w-0 flex-1 bg-transparent px-3 text-sm
+        text-white outline-none placeholder:text-white/60"
                   aria-label="Tìm kiếm sản phẩm"
                 />
 
                 <button
                   type="button"
                   onClick={handleSearch}
-                  className="flex w-11 items-center justify-center"
+                  className="flex h-full w-11 shrink-0 items-center justify-center"
                   aria-label="Tìm kiếm"
                 >
                   <img
@@ -549,6 +939,16 @@ function Header() {
                     className="h-4 w-4 brightness-0 invert"
                   />
                 </button>
+
+                {isSearchOpen && searchValue.trim() && (
+                  <SearchSuggestions
+                    query={searchValue}
+                    onSelect={() => {
+                      setIsSearchOpen(false);
+                      closeMobileMenu();
+                    }}
+                  />
+                )}
               </div>
             </div>
 

@@ -1,7 +1,11 @@
 import { useSearchParams } from "react-router-dom";
 
 import ProductGrid from "../../components/product/ProductGrid";
-import { products, type Space } from "../../data/products";
+import {
+  products,
+  getProductRooms,
+  type ProductRoom,
+} from "../../data/products";
 
 import Living from "../../assets/images/spaces/living-room.jpg";
 import Bedroom from "../../assets/images/spaces/bedroom.jpg";
@@ -49,10 +53,35 @@ const spaceOptions = [
 
 function normalizeText(value: string): string {
   return value
+    .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
+    .replace(/đ/g, "d")
     .trim();
+}
+
+/**
+ * Tìm theo từ trong tên, danh mục và danh mục con.
+ * Từ ngắn (1-2 ký tự) phải khớp nguyên từ: "tủ" không khớp "tượng".
+ * Từ >= 3 ký tự có thể khớp đầu từ để hỗ trợ gợi ý khi đang gõ.
+ */
+function matchesKeyword(text: string, search: string): boolean {
+  const words = normalizeText(text)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+  const searchWords = normalizeText(search)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+
+  if (searchWords.length === 0) return false;
+
+  return searchWords.every((searchWord) =>
+    words.some(
+      (word) =>
+        word === searchWord ||
+        (searchWord.length >= 3 && word.startsWith(searchWord)),
+    ),
+  );
 }
 
 function formatPriceInput(value: string): string {
@@ -73,12 +102,28 @@ function Products() {
   const categoryParam = searchParams.get("category");
   const subcategoryParam = searchParams.get("subcategory");
   const searchParam = searchParams.get("search") || "";
-  const spaceParam = searchParams.get("space") || "";
+  // `space` là tên tham số thống nhất. Hỗ trợ URL cũ dùng `room`
+  // để tránh làm hỏng liên kết đã được tạo từ phiên bản còn lại.
+  const legacyRoomParam = searchParams.get("room") || "";
+  const roomToSpace: Record<string, string> = {
+    "Phòng khách": "phong-khach",
+    "Phòng ngủ": "phong-ngu",
+    "Phòng ăn": "phong-an",
+    "Phòng làm việc": "phong-lam-viec",
+    "phong-khach": "phong-khach",
+    "phong-ngu": "phong-ngu",
+    "phong-an": "phong-an",
+    "phong-lam-viec": "phong-lam-viec",
+  };
+  const spaceParam =
+    searchParams.get("space") || roomToSpace[legacyRoomParam] || "";
 
-  const currentSpace =
-    spaceParam in spacePages
-      ? spacePages[spaceParam as keyof typeof spacePages]
-      : undefined;
+  const currentSpace = Object.prototype.hasOwnProperty.call(
+    spacePages,
+    spaceParam,
+  )
+    ? spacePages[spaceParam as keyof typeof spacePages]
+    : undefined;
 
   const minPriceParam = searchParams.get("minPrice");
   const maxPriceParam = searchParams.get("maxPrice");
@@ -157,7 +202,10 @@ function Products() {
     // SPACE
     // =========================================================
 
-    if (currentSpace && !product.spaces?.includes(currentSpace.name as Space)) {
+    if (
+      currentSpace &&
+      !getProductRooms(product).includes(currentSpace.name as ProductRoom)
+    ) {
       return false;
     }
 
@@ -188,18 +236,15 @@ function Products() {
     // =========================================================
 
     if (normalizedSearch) {
-      const searchableText = normalizeText(
-        [
-          product.name,
-          product.category,
-          product.subcategory,
-          product.description,
-        ]
-          .filter(Boolean)
-          .join(" "),
-      );
+      const searchableText = [
+        product.name,
+        product.category,
+        product.subcategory,
+      ]
+        .filter(Boolean)
+        .join(" ");
 
-      if (!searchableText.includes(normalizedSearch)) {
+      if (!matchesKeyword(searchableText, normalizedSearch)) {
         return false;
       }
     }
@@ -272,6 +317,8 @@ function Products() {
   // =========================================================
 
   const hasFilter =
+    Boolean(spaceParam) ||
+    Boolean(legacyRoomParam) ||
     Boolean(categoryParam) ||
     Boolean(subcategoryParam) ||
     Boolean(searchParam) ||
@@ -286,6 +333,7 @@ function Products() {
 
   function updateParams(updates: Record<string, string | null>) {
     const params = new URLSearchParams(searchParams);
+    params.delete("room");
 
     Object.entries(updates).forEach(function ([key, value]) {
       if (value === null || value === "") {
@@ -456,6 +504,7 @@ function Products() {
 
   function handleSpaceChange(space: string) {
     const params = new URLSearchParams(searchParams);
+    params.delete("room");
 
     // Đổi không gian thì bỏ danh mục cũ
     params.delete("category");
