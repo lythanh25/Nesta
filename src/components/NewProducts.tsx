@@ -1,7 +1,13 @@
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+
 import { newProducts } from "../data/products";
 import ProductCard from "./product/ProductCard";
 import shoppingCart from "../assets/shopping-cart.svg";
+
+import { isProductFavorite, toggleProductFavorite } from "../utils/favorites";
+import { addCartItem } from "../utils/cart";
+import { getCustomerSession } from "../utils/customerAuth";
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
@@ -26,8 +32,33 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 function NewProducts() {
+  const navigate = useNavigate();
   const mainProduct = newProducts[0];
   const otherProducts = newProducts.slice(1, 5);
+
+  const [isFavorite, setIsFavorite] = useState(() =>
+    mainProduct ? isProductFavorite(mainProduct.id) : false,
+  );
+
+  useEffect(() => {
+    if (!mainProduct) return;
+
+    const updateFavorite = () => {
+      setIsFavorite(isProductFavorite(mainProduct.id));
+    };
+
+    updateFavorite();
+
+    window.addEventListener("favoritesUpdated", updateFavorite);
+    window.addEventListener("customerAuthUpdated", updateFavorite);
+    window.addEventListener("storage", updateFavorite);
+
+    return () => {
+      window.removeEventListener("favoritesUpdated", updateFavorite);
+      window.removeEventListener("customerAuthUpdated", updateFavorite);
+      window.removeEventListener("storage", updateFavorite);
+    };
+  }, [mainProduct?.id]);
 
   if (!mainProduct) return null;
 
@@ -35,55 +66,42 @@ function NewProducts() {
     mainProduct.price,
   );
 
+  function handleToggleFavorite() {
+    if (!getCustomerSession()) {
+      alert("Vui lòng đăng nhập để sử dụng danh sách yêu thích.");
+      navigate("/login");
+      return;
+    }
+
+    toggleProductFavorite(mainProduct.id);
+    setIsFavorite(isProductFavorite(mainProduct.id));
+  }
+
   function addMainProductToCart() {
-    const savedCart = localStorage.getItem("nesta-cart");
-
-    let cartItems: {
-      productId: number;
-      quantity: number;
-    }[] = [];
-
-    if (savedCart) {
-      try {
-        const parsed = JSON.parse(savedCart);
-        cartItems = Array.isArray(parsed) ? parsed : [];
-      } catch {
-        cartItems = [];
-      }
+    if (!getCustomerSession()) {
+      alert("Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng.");
+      navigate("/login");
+      return;
     }
 
-    const existingItem = cartItems.find(
-      (item) => item.productId === mainProduct.id,
-    );
+    // Sản phẩm có kích thước sẽ sử dụng kích thước mặc định đầu tiên.
+    const defaultSize = mainProduct.sizes?.[0]?.label;
 
-    if (existingItem) {
-      existingItem.quantity += 1;
-    } else {
-      cartItems.push({
-        productId: mainProduct.id,
-        quantity: 1,
-      });
+    const success = addCartItem(mainProduct.id, defaultSize, 1);
+
+    if (!success) {
+      alert("Không thể thêm sản phẩm vào giỏ hàng. Vui lòng thử lại.");
+      return;
     }
 
-    localStorage.setItem("nesta-cart", JSON.stringify(cartItems));
-
-    window.dispatchEvent(new Event("cartUpdated"));
+    alert("Đã thêm sản phẩm vào giỏ hàng.");
   }
 
   return (
-    <section className="bg-[#f7f1ed] px-5 pb-8 md:px-8 md:pb-10 ">
+    <section className="bg-[#f7f1ed] px-5 pb-8 md:px-8 md:pb-10">
       <div className="mx-auto max-w-7xl">
         <SectionTitle>SẢN PHẨM MỚI</SectionTitle>
 
-        {/* =========================================
-            4 COLUMNS × 2 ROWS
-
-            MAIN:
-            2 columns × 2 rows
-
-            SMALL:
-            1 column × 1 row
-        ========================================== */}
         <div
           className="
             grid
@@ -94,9 +112,7 @@ function NewProducts() {
             sm:gap-2
           "
         >
-          {/* =========================================
-              MAIN PRODUCT
-          ========================================== */}
+          {/* SẢN PHẨM CHÍNH */}
           <article
             className="
               group
@@ -113,7 +129,7 @@ function NewProducts() {
               bg-white
             "
           >
-            {/* MAIN IMAGE */}
+            {/* ẢNH SẢN PHẨM */}
             <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
               <Link
                 to={`/products/${mainProduct.id}`}
@@ -135,10 +151,16 @@ function NewProducts() {
                 />
               </Link>
 
-              {/* FAVORITE */}
+              {/* YÊU THÍCH */}
               <button
                 type="button"
-                aria-label="Thêm vào yêu thích"
+                aria-label={
+                  isFavorite
+                    ? "Xóa khỏi danh sách yêu thích"
+                    : "Thêm vào danh sách yêu thích"
+                }
+                aria-pressed={isFavorite}
+                onClick={handleToggleFavorite}
                 className="
                   absolute
                   right-2.5
@@ -159,11 +181,13 @@ function NewProducts() {
                   cursor-pointer
                 "
               >
-                ♡
+                <span className={isFavorite ? "text-red-500" : ""}>
+                  {isFavorite ? "♥" : "♡"}
+                </span>
               </button>
             </div>
 
-            {/* MAIN INFORMATION */}
+            {/* THÔNG TIN SẢN PHẨM */}
             <div
               className="
                 flex
@@ -178,7 +202,6 @@ function NewProducts() {
                 sm:py-3
               "
             >
-              {/* NAME */}
               <Link to={`/products/${mainProduct.id}`} className="min-w-0">
                 <h3
                   className="
@@ -195,7 +218,7 @@ function NewProducts() {
                 </h3>
               </Link>
 
-              {/* PRICE + CART */}
+              {/* GIÁ VÀ NÚT GIỎ HÀNG */}
               <div className="flex items-center justify-between gap-2">
                 <p
                   className="
@@ -246,9 +269,7 @@ function NewProducts() {
             </div>
           </article>
 
-          {/* =========================================
-              FOUR SMALL PRODUCTS
-          ========================================== */}
+          {/* BỐN SẢN PHẨM NHỎ */}
           {otherProducts.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}

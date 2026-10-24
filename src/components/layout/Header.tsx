@@ -5,20 +5,63 @@ import searchIcon from "../../assets/search.svg";
 import cartIcon from "../../assets/shopping-cart.svg";
 import userIcon from "../../assets/user-alt.svg";
 import { products } from "../../data/products";
+import { getCartProductCount } from "../../utils/cart";
+import { getCustomerSession } from "../../utils/customerAuth";
 
 type CategoryMenu = {
   name: string;
   subcategories: string[];
 };
 
-/**
- * Chuẩn hóa chuỗi để so sánh category/subcategory.
- * Ví dụ:
- * "GHẾ"      -> "ghe"
- * "Ghế"      -> "ghe"
- * "GIƯỜNG"   -> "giuong"
- * "Giường"   -> "giuong"
- */
+type CustomerSession = {
+  id: string;
+  fullName: string;
+  email: string;
+};
+
+const USER_SESSION_KEY = "nesta-user-session";
+
+function readCustomerSession(): CustomerSession | null {
+  try {
+    const saved = localStorage.getItem(USER_SESSION_KEY);
+
+    if (!saved) return null;
+
+    const session: unknown = JSON.parse(saved);
+
+    if (
+      typeof session !== "object" ||
+      session === null ||
+      !("user" in session)
+    ) {
+      return null;
+    }
+
+    const user = session.user;
+
+    if (
+      typeof user !== "object" ||
+      user === null ||
+      !("id" in user) ||
+      !("fullName" in user) ||
+      !("email" in user) ||
+      typeof user.id !== "string" ||
+      typeof user.fullName !== "string" ||
+      typeof user.email !== "string"
+    ) {
+      return null;
+    }
+
+    return {
+      id: user.id,
+      fullName: user.fullName,
+      email: user.email,
+    };
+  } catch {
+    return null;
+  }
+}
+
 function normalizeText(value: string): string {
   return value
     .toLowerCase()
@@ -52,15 +95,6 @@ function matchesKeyword(text: string, search: string): boolean {
   );
 }
 
-/**
- * Lấy category thực tế từ products.
- *
- * Quan trọng:
- * Header không tự tạo "GHẾ", "BÀN", ...
- * mà lấy giá trị thật đang có trong products.ts.
- *
- * Nhờ vậy URL luôn khớp với Products.tsx.
- */
 const productMenu: CategoryMenu[] = Array.from(
   new Map(
     products.map(function (product) {
@@ -335,48 +369,54 @@ function Header() {
   //Badge
   const [cartCount, setCartCount] = useState(0);
 
+  const [customerSession, setCustomerSession] =
+    useState<CustomerSession | null>(() => readCustomerSession());
+
+  const [isAccountOpen, setIsAccountOpen] = useState(false);
+
   useEffect(() => {
-    function updateCartCount() {
-      try {
-        const savedCart = localStorage.getItem("nesta-cart");
-        const cartItems: unknown = savedCart ? JSON.parse(savedCart) : [];
+    const updateCustomerSession = () => {
+      setCustomerSession(getCustomerSession());
+    };
 
-        if (!Array.isArray(cartItems)) {
-          setCartCount(0);
-          return;
-        }
+    updateCustomerSession();
 
-        // Đếm số productId khác nhau, không cộng quantity.
-        const uniqueProducts = new Set<string>();
+    window.addEventListener("customerAuthUpdated", updateCustomerSession);
 
-        cartItems.forEach((item) => {
-          if (
-            item &&
-            typeof item === "object" &&
-            "productId" in item &&
-            typeof item.productId === "number"
-          ) {
-            const size =
-              "size" in item && typeof item.size === "string" ? item.size : "";
+    window.addEventListener("storage", updateCustomerSession);
 
-            uniqueProducts.add(`${item.productId}-${size}`);
-          }
-        });
+    return () => {
+      window.removeEventListener("customerAuthUpdated", updateCustomerSession);
 
-        setCartCount(uniqueProducts.size);
-      } catch {
-        setCartCount(0);
-      }
-    }
+      window.removeEventListener("storage", updateCustomerSession);
+    };
+  }, []);
 
+  useEffect(() => {
+    const updateCartCount = () => {
+      setCartCount(getCartProductCount());
+    };
+
+    // Cập nhật ngay khi Header được render lần đầu.
     updateCartCount();
 
+    // Cập nhật khi giỏ hàng thay đổi trong ứng dụng.
     window.addEventListener("cartUpdated", updateCartCount);
+
+    // Cập nhật khi đăng nhập, đăng xuất hoặc đổi tài khoản.
+    window.addEventListener("customerAuthUpdated", updateCartCount);
+
+    // Đồng bộ khi localStorage thay đổi từ tab khác.
     window.addEventListener("storage", updateCartCount);
+
+    // Kiểm tra lại khi quay về tab trình duyệt.
+    window.addEventListener("focus", updateCartCount);
 
     return () => {
       window.removeEventListener("cartUpdated", updateCartCount);
+      window.removeEventListener("customerAuthUpdated", updateCartCount);
       window.removeEventListener("storage", updateCartCount);
+      window.removeEventListener("focus", updateCartCount);
     };
   }, []);
 
@@ -399,6 +439,8 @@ function Header() {
       navigate("/products");
       setIsMenuOpen(false);
       setIsProductOpen(false);
+      setIsSearchOpen(false);
+      searchInputRef.current?.blur();
       return;
     }
 
@@ -407,6 +449,8 @@ function Header() {
     setIsMenuOpen(false);
     setIsProductOpen(false);
     setOpenCategory(null);
+    setIsSearchOpen(false);
+    searchInputRef.current?.blur();
   }
 
   // Đóng gợi ý khi bấm ra ngoài hoặc nhấn Escape.
@@ -512,6 +556,8 @@ function Header() {
     setIsProductOpen((current) => !current);
     setOpenCategory(null);
   }
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   return (
     <header className="fixed left-0 top-0 z-50 w-full bg-[#3B2F25] text-white">
@@ -712,6 +758,7 @@ function Header() {
             overflow-visible rounded border border-white/50 bg-white/10"
           >
             <input
+              ref={searchInputRef}
               type="text"
               value={searchValue}
               onChange={(event) => {
@@ -790,18 +837,112 @@ function Header() {
             )}
           </Link>
 
-          {/* Account */}
-          <Link
-            to="/profile"
-            className="flex h-9 w-9 items-center justify-center transition-opacity hover:opacity-70"
-            aria-label="Tài khoản"
-          >
-            <img
-              src={userIcon}
-              alt=""
-              className="h-5 w-5 brightness-0 invert"
-            />
-          </Link>
+          {/* ACCOUNT DESKTOP */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsAccountOpen((current) => !current)}
+              aria-label="Tài khoản"
+              aria-expanded={isAccountOpen}
+              className="flex h-9 w-9 items-center justify-center transition-opacity hover:opacity-70"
+            >
+              <img
+                src={userIcon}
+                alt=""
+                className="h-5 w-5 brightness-0 invert"
+              />
+            </button>
+
+            {isAccountOpen && (
+              <>
+                <button
+                  type="button"
+                  aria-label="Đóng menu tài khoản"
+                  className="fixed inset-0 z-40 cursor-default"
+                  onClick={() => setIsAccountOpen(false)}
+                />
+
+                <div className="absolute right-0 top-full z-50 mt-3 w-56 border border-[#e5e0da] bg-white py-2 text-[#2d261f] shadow-xl">
+                  {customerSession ? (
+                    <>
+                      <div className="border-b border-[#e5e0da] px-4 py-3">
+                        <p className="text-xs font-semibold">
+                          {customerSession.fullName}
+                        </p>
+                        <p className="mt-1 break-all text-[11px] text-[#756d66]">
+                          {customerSession.email}
+                        </p>
+                      </div>
+
+                      <Link
+                        to="/profile"
+                        onClick={() => setIsAccountOpen(false)}
+                        className="block px-4 py-3 text-sm hover:bg-[#f7f5f2]"
+                      >
+                        Tài khoản của tôi
+                      </Link>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAccountOpen(false);
+                          navigate("/profile#orders");
+                        }}
+                        className="block w-full px-4 py-3 text-left text-sm hover:bg-[#f7f5f2]"
+                      >
+                        Đơn hàng của tôi
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAccountOpen(false);
+                          navigate("/profile#favorites");
+                        }}
+                        className="block w-full px-4 py-3 text-left text-sm hover:bg-[#f7f5f2]"
+                      >
+                        Sản phẩm yêu thích
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          localStorage.removeItem(USER_SESSION_KEY);
+                          setCustomerSession(null);
+                          setIsAccountOpen(false);
+                          window.dispatchEvent(
+                            new Event("customerAuthUpdated"),
+                          );
+                          navigate("/");
+                        }}
+                        className="block w-full border-t border-[#e5e0da] px-4 py-3 text-left text-sm text-red-700 hover:bg-red-50"
+                      >
+                        Đăng xuất
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <Link
+                        to="/login"
+                        onClick={() => setIsAccountOpen(false)}
+                        className="block px-4 py-3 text-sm hover:bg-[#f7f5f2]"
+                      >
+                        Đăng nhập
+                      </Link>
+
+                      <Link
+                        to="/register"
+                        onClick={() => setIsAccountOpen(false)}
+                        className="block px-4 py-3 text-sm hover:bg-[#f7f5f2]"
+                      >
+                        Đăng ký
+                      </Link>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -913,6 +1054,7 @@ function Header() {
       rounded border border-white/40 bg-white/10"
               >
                 <input
+                  ref={searchInputRef}
                   type="text"
                   value={searchValue}
                   onChange={(event) => {
@@ -1090,19 +1232,83 @@ function Header() {
               Về chúng tôi
             </Link>
 
-            {/* Account */}
-            <Link
-              to="/profile"
-              onClick={closeMobileMenu}
-              className="flex items-center gap-3 py-4 text-sm font-medium"
-            >
-              <img
-                src={userIcon}
-                alt=""
-                className="h-5 w-5 brightness-0 invert"
-              />
-              Tài khoản
-            </Link>
+            {/* ACCOUNT MOBILE */}
+            <div className="border-t border-white/10">
+              {customerSession ? (
+                <>
+                  <div className="py-4">
+                    <p className="text-sm font-medium">
+                      {customerSession.fullName}
+                    </p>
+                    <p className="mt-1 break-all text-xs text-white/60">
+                      {customerSession.email}
+                    </p>
+                  </div>
+
+                  <Link
+                    to="/profile"
+                    onClick={closeMobileMenu}
+                    className="block py-3 text-sm hover:text-white/70"
+                  >
+                    Tài khoản của tôi
+                  </Link>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeMobileMenu();
+                      navigate("/profile#orders");
+                    }}
+                    className="block w-full py-3 text-left text-sm hover:text-white/70"
+                  >
+                    Đơn hàng của tôi
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeMobileMenu();
+                      navigate("/profile#favorites");
+                    }}
+                    className="block w-full py-3 text-left text-sm hover:text-white/70"
+                  >
+                    Sản phẩm yêu thích
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.removeItem(USER_SESSION_KEY);
+                      setCustomerSession(null);
+                      closeMobileMenu();
+                      window.dispatchEvent(new Event("customerAuthUpdated"));
+                      navigate("/");
+                    }}
+                    className="block w-full py-3 text-left text-sm text-red-200"
+                  >
+                    Đăng xuất
+                  </button>
+                </>
+              ) : (
+                <div className="flex gap-3 py-4">
+                  <Link
+                    to="/login"
+                    onClick={closeMobileMenu}
+                    className="flex-1 border border-white/50 px-3 py-3 text-center text-sm hover:bg-white/10"
+                  >
+                    Đăng nhập
+                  </Link>
+
+                  <Link
+                    to="/register"
+                    onClick={closeMobileMenu}
+                    className="flex-1 bg-white px-3 py-3 text-center text-sm text-[#3b2f25] hover:bg-white/90"
+                  >
+                    Đăng ký
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

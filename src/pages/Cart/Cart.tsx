@@ -4,15 +4,9 @@ import { Link } from "react-router-dom";
 import banner from "../../assets/banner.jpg";
 import deleteIcon from "../../assets/Delete.svg";
 import { getSizePrice, products, type Product } from "../../data/products";
+import { getCartItems, saveCartItems, type CartItem } from "../../utils/cart";
 
-const CART_STORAGE_KEY = "nesta-cart";
 const SHIPPING_FEE = 30_000;
-
-type CartItem = {
-  productId: number;
-  size?: string;
-  quantity: number;
-};
 
 type CartProduct = {
   product: Product;
@@ -23,54 +17,6 @@ type CartProduct = {
 
 function formatPrice(price: number) {
   return new Intl.NumberFormat("vi-VN").format(price);
-}
-
-// =========================================================
-// READ CART
-// =========================================================
-
-function readCart(): CartItem[] {
-  const savedCart = localStorage.getItem(CART_STORAGE_KEY);
-
-  if (!savedCart) {
-    return [];
-  }
-
-  try {
-    const parsed: unknown = JSON.parse(savedCart);
-
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed.flatMap((value: unknown): CartItem[] => {
-      if (typeof value !== "object" || value === null) {
-        return [];
-      }
-
-      const item = value as Record<string, unknown>;
-
-      if (
-        typeof item.productId !== "number" ||
-        !Number.isInteger(item.productId) ||
-        typeof item.quantity !== "number" ||
-        !Number.isFinite(item.quantity) ||
-        item.quantity < 1
-      ) {
-        return [];
-      }
-
-      return [
-        {
-          productId: item.productId,
-          quantity: Math.floor(item.quantity),
-          size: typeof item.size === "string" ? item.size : undefined,
-        },
-      ];
-    });
-  } catch {
-    return [];
-  }
 }
 
 // =========================================================
@@ -110,16 +56,18 @@ function Cart() {
 
   useEffect(() => {
     function loadCart() {
-      setCartItems(readCart());
+      setCartItems(getCartItems());
     }
 
     loadCart();
 
     window.addEventListener("cartUpdated", loadCart);
+    window.addEventListener("customerAuthUpdated", loadCart);
     window.addEventListener("storage", loadCart);
 
     return () => {
       window.removeEventListener("cartUpdated", loadCart);
+      window.removeEventListener("customerAuthUpdated", loadCart);
       window.removeEventListener("storage", loadCart);
     };
   }, []);
@@ -129,11 +77,11 @@ function Cart() {
   // =========================================================
 
   function saveCart(items: CartItem[]) {
-    setCartItems(items);
+    const saved = saveCartItems(items);
 
-    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
-
-    window.dispatchEvent(new Event("cartUpdated"));
+    if (saved) {
+      setCartItems(items);
+    }
   }
 
   // =========================================================

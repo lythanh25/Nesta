@@ -1,5 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
+
+import {
+  changeCustomerPassword,
+  getCustomerSession,
+  logoutCustomer,
+  updateCustomerProfile,
+} from "../../utils/customerAuth";
 
 import { products } from "../../data/products";
 import type { Product } from "../../data/products";
@@ -8,6 +15,10 @@ import { getFavoriteIds, toggleProductFavorite } from "../../utils/favorites";
 const PROFILE_STORAGE_KEY = "nesta-profile";
 const ADDRESS_STORAGE_KEY = "nesta-address";
 const ORDERS_STORAGE_KEY = "nesta-orders";
+
+function getUserStorageKey(key: string, userId: string) {
+  return `${key}:${userId}`;
+}
 
 type ProfileInfo = {
   fullName: string;
@@ -99,15 +110,34 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function readOrders(): Order[] {
-  const saved = readStorage<unknown>(ORDERS_STORAGE_KEY, []);
+function readOrders(userId: string, userEmail: string): Order[] {
+  const userOrdersKey = getUserStorageKey(ORDERS_STORAGE_KEY, userId);
+  const saved = readStorage<unknown>(userOrdersKey, null);
 
-  if (!Array.isArray(saved)) {
+  // Ưu tiên lịch sử đơn hàng riêng của tài khoản.
+  if (Array.isArray(saved)) {
+    return saved.filter((value): value is Order => {
+      if (!isRecord(value)) return false;
+
+      return (
+        typeof value.id === "string" &&
+        typeof value.createdAt === "string" &&
+        Array.isArray(value.items) &&
+        typeof value.total === "number"
+      );
+    });
+  }
+
+  // Chỉ lấy đơn hàng cũ có email trùng với tài khoản hiện tại.
+  // Không chuyển toàn bộ đơn hàng dùng chung sang một tài khoản.
+  const legacyOrders = readStorage<unknown>(ORDERS_STORAGE_KEY, []);
+
+  if (!Array.isArray(legacyOrders)) {
     return [];
   }
 
-  return saved.filter((value): value is Order => {
-    if (!isRecord(value)) {
+  const matchingOrders = legacyOrders.filter((value): value is Order => {
+    if (!isRecord(value) || !isRecord(value.customer)) {
       return false;
     }
 
@@ -115,9 +145,22 @@ function readOrders(): Order[] {
       typeof value.id === "string" &&
       typeof value.createdAt === "string" &&
       Array.isArray(value.items) &&
-      typeof value.total === "number"
+      typeof value.total === "number" &&
+      typeof value.customer.email === "string" &&
+      value.customer.email.toLowerCase() === userEmail.toLowerCase()
     );
   });
+
+  // Lưu các đơn hàng khớp email vào tài khoản hiện tại.
+  try {
+    if (matchingOrders.length > 0) {
+      localStorage.setItem(userOrdersKey, JSON.stringify(matchingOrders));
+    }
+  } catch {
+    // Vẫn hiển thị dữ liệu đã đọc được nếu không ghi được bộ nhớ.
+  }
+
+  return matchingOrders;
 }
 
 function formatPrice(price: number) {
@@ -164,23 +207,46 @@ function getOrderStatusClass(status: string) {
 }
 
 function Profile() {
+  const navigate = useNavigate();
+  const session = getCustomerSession();
+
   const [activeSection, setActiveSection] = useState<SectionId>("personal");
 
   const [favoriteIds, setFavoriteIds] = useState<number[]>(() =>
     getFavoriteIds(),
   );
 
-  const [profile, setProfile] = useState<ProfileInfo>(() => ({
-    ...emptyProfile,
-    ...readStorage<Partial<ProfileInfo>>(PROFILE_STORAGE_KEY, emptyProfile),
-  }));
+  const [profile, setProfile] = useState<ProfileInfo>(() => {
+    if (!session) return { ...emptyProfile };
 
-  const [address, setAddress] = useState<AddressInfo>(() => ({
-    ...emptyAddress,
-    ...readStorage<Partial<AddressInfo>>(ADDRESS_STORAGE_KEY, emptyAddress),
-  }));
+    const saved = readStorage<Partial<ProfileInfo>>(
+      getUserStorageKey(PROFILE_STORAGE_KEY, session.id),
+      {},
+    );
 
-  const [orders, setOrders] = useState<Order[]>(readOrders);
+    return {
+      ...emptyProfile,
+      ...saved,
+      fullName: saved.fullName || session.fullName,
+      email: saved.email || session.email,
+    };
+  });
+
+  const [address, setAddress] = useState<AddressInfo>(() => {
+    if (!session) return { ...emptyAddress };
+
+    return {
+      ...emptyAddress,
+      ...readStorage<Partial<AddressInfo>>(
+        getUserStorageKey(ADDRESS_STORAGE_KEY, session.id),
+        {},
+      ),
+    };
+  });
+
+  const [orders, setOrders] = useState<Order[]>(() =>
+    session ? readOrders(session.id, session.email) : [],
+  );
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -189,29 +255,54 @@ function Profile() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  // Đồng bộ yêu thích, đơn hàng và dữ liệu khi quay lại tab.
   useEffect(() => {
-    function updateFavorites() {
-      setFavoriteIds(getFavoriteIds());
-    }
-
-    function updateOrders() {
-      setOrders(readOrders());
-    }
-
     function refreshData() {
-      updateFavorites();
-      updateOrders();
+      const currentSession = getCustomerSession();
+
+      setFavoriteIds(getFavoriteIds());
+
+      if (!currentSession) {
+        setProfile({ ...emptyProfile });
+        setAddress({ ...emptyAddress });
+        setOrders([]);
+        return;
+      }
+
+      const savedProfile = readStorage<Partial<ProfileInfo>>(
+        getUserStorageKey(PROFILE_STORAGE_KEY, currentSession.id),
+        {},
+      );
+
+      setProfile({
+        ...emptyProfile,
+        ...savedProfile,
+        fullName: savedProfile.fullName || currentSession.fullName,
+        email: savedProfile.email || currentSession.email,
+      });
+
+      setAddress({
+        ...emptyAddress,
+        ...readStorage<Partial<AddressInfo>>(
+          getUserStorageKey(ADDRESS_STORAGE_KEY, currentSession.id),
+          {},
+        ),
+      });
+
+      setOrders(readOrders(currentSession.id, currentSession.email));
     }
 
-    window.addEventListener("favoritesUpdated", updateFavorites);
-    window.addEventListener("ordersUpdated", updateOrders);
+    refreshData();
+
+    window.addEventListener("customerAuthUpdated", refreshData);
+    window.addEventListener("favoritesUpdated", refreshData);
+    window.addEventListener("ordersUpdated", refreshData);
     window.addEventListener("storage", refreshData);
     window.addEventListener("focus", refreshData);
 
     return () => {
-      window.removeEventListener("favoritesUpdated", updateFavorites);
-      window.removeEventListener("ordersUpdated", updateOrders);
+      window.removeEventListener("customerAuthUpdated", refreshData);
+      window.removeEventListener("favoritesUpdated", refreshData);
+      window.removeEventListener("ordersUpdated", refreshData);
       window.removeEventListener("storage", refreshData);
       window.removeEventListener("focus", refreshData);
     };
@@ -261,12 +352,31 @@ function Profile() {
     event.preventDefault();
     clearMessages();
 
-    try {
-      localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+    const result = updateCustomerProfile({
+      fullName: profile.fullName,
+      email: profile.email,
+      phone: profile.phone,
+    });
 
-      setMessage("Thông tin cá nhân đã được lưu thành công.");
+    if (!result.success) {
+      setError(result.message);
+      return;
+    }
+
+    if (!session) {
+      setError("Vui lòng đăng nhập để cập nhật thông tin cá nhân.");
+      return;
+    }
+
+    try {
+      localStorage.setItem(
+        getUserStorageKey(PROFILE_STORAGE_KEY, session.id),
+        JSON.stringify(profile),
+      );
+
+      setMessage("Thông tin cá nhân đã được cập nhật thành công.");
     } catch {
-      setError("Không thể lưu thông tin. Vui lòng thử lại.");
+      setError("Không thể lưu thông tin cá nhân. Vui lòng thử lại.");
     }
   }
 
@@ -274,8 +384,16 @@ function Profile() {
     event.preventDefault();
     clearMessages();
 
+    if (!session) {
+      setError("Vui lòng đăng nhập để cập nhật địa chỉ.");
+      return;
+    }
+
     try {
-      localStorage.setItem(ADDRESS_STORAGE_KEY, JSON.stringify(address));
+      localStorage.setItem(
+        getUserStorageKey(ADDRESS_STORAGE_KEY, session.id),
+        JSON.stringify(address),
+      );
 
       setMessage("Địa chỉ giao hàng đã được lưu thành công.");
     } catch {
@@ -302,13 +420,18 @@ function Profile() {
       return;
     }
 
+    const result = changeCustomerPassword(currentPassword, newPassword);
+
+    if (!result.success) {
+      setError(result.message);
+      return;
+    }
+
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
 
-    setError(
-      "Website chưa có backend xác thực nên chưa thể thay đổi mật khẩu thật. Mật khẩu không được lưu vào trình duyệt.",
-    );
+    setMessage("Đổi mật khẩu thành công.");
   }
 
   function removeFavorite(productId: number) {
@@ -325,16 +448,18 @@ function Profile() {
       return;
     }
 
-    setMessage(
-      "Website hiện chưa có hệ thống đăng nhập. Khi tích hợp backend, bạn cần kết nối chức năng đăng xuất tại đây.",
-    );
-    setError("");
+    logoutCustomer();
+    navigate("/login", { replace: true });
   }
 
   function getOrderItemProduct(item: OrderItem): Product | undefined {
     return products.find((product) => product.id === item.productId);
   }
 
+  if (!session) {
+    return <Navigate to="/login" replace />;
+  }
+  
   return (
     <main className="min-h-screen bg-[#f7f1ed] pb-14 md:pb-20">
       {/* TIÊU ĐỀ TRANG */}

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import Product3DViewer from "../../components/product/Product3DViewer";
 import ProductGrid from "../../components/product/ProductGrid";
@@ -13,16 +13,18 @@ import {
   isProductFavorite,
   toggleProductFavorite,
 } from "../../utils/favorites";
+import { addCartItem } from "../../utils/cart";
+import { getCustomerSession } from "../../utils/customerAuth";
+import {
+  addProductReview,
+  canReviewProduct,
+  getMyProductReview,
+  getProductReviews,
+  getReviewSummary,
+  type ProductReview,
+} from "../../utils/reviews";
 
 import type { Product } from "../../data/products";
-
-const CART_STORAGE_KEY = "nesta-cart";
-
-type CartItem = {
-  productId: number;
-  size?: string;
-  quantity: number;
-};
 
 // =====================================================
 // PRODUCT DETAIL
@@ -90,6 +92,7 @@ type ProductDetailContentProps = {
 };
 
 function ProductDetailContent({ product }: ProductDetailContentProps) {
+  const navigate = useNavigate();
   const [selectedImage, setSelectedImage] = useState(0);
 
   const [quantity, setQuantity] = useState(1);
@@ -103,6 +106,95 @@ function ProductDetailContent({ product }: ProductDetailContentProps) {
   });
 
   const [show3D, setShow3D] = useState(false);
+
+  const [reviews, setReviews] = useState<ProductReview[]>(() =>
+    getProductReviews(product.id),
+  );
+
+  const [reviewSummary, setReviewSummary] = useState(() =>
+    getReviewSummary(product.id),
+  );
+
+  const [myReview, setMyReview] = useState<ProductReview | undefined>(() =>
+    getMyProductReview(product.id),
+  );
+
+  const [canWriteReview, setCanWriteReview] = useState(() =>
+    canReviewProduct(product.id),
+  );
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [showReviewForm, setShowReviewForm] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+  const [reviewSuccess, setReviewSuccess] = useState("");
+
+  const refreshReviews = useCallback(() => {
+    setReviews(getProductReviews(product.id));
+    setReviewSummary(getReviewSummary(product.id));
+    setMyReview(getMyProductReview(product.id));
+    setCanWriteReview(canReviewProduct(product.id));
+  }, [product.id]);
+
+  useEffect(() => {
+    function handleReviewsUpdated() {
+      setReviews(getProductReviews(product.id));
+      setReviewSummary(getReviewSummary(product.id));
+      setMyReview(getMyProductReview(product.id));
+      setCanWriteReview(canReviewProduct(product.id));
+    }
+
+    function handleOrdersUpdated() {
+      handleReviewsUpdated();
+    }
+
+    function handleAuthUpdated() {
+      handleReviewsUpdated();
+    }
+
+    function handleStorage(event: StorageEvent) {
+      if (
+        event.key === null ||
+        event.key === "nesta-reviews" ||
+        event.key?.startsWith("nesta-orders:") ||
+        event.key === "customer-session"
+      ) {
+        handleReviewsUpdated();
+      }
+    }
+
+    window.addEventListener("reviewsUpdated", handleReviewsUpdated);
+    window.addEventListener("ordersUpdated", handleOrdersUpdated);
+    window.addEventListener("customerAuthUpdated", handleAuthUpdated);
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener("reviewsUpdated", handleReviewsUpdated);
+      window.removeEventListener("ordersUpdated", handleOrdersUpdated);
+      window.removeEventListener("customerAuthUpdated", handleAuthUpdated);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [product.id]);
+
+  function handleSubmitReview(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setReviewError("");
+    setReviewSuccess("");
+
+    try {
+      addProductReview(product.id, reviewRating, reviewComment);
+      setReviewComment("");
+      setReviewRating(5);
+      setShowReviewForm(false);
+      setReviewSuccess("Đánh giá của bạn đã được gửi thành công.");
+      refreshReviews();
+    } catch (error) {
+      setReviewError(
+        error instanceof Error
+          ? error.message
+          : "Không thể gửi đánh giá. Vui lòng thử lại.",
+      );
+    }
+  }
 
   // =====================================================
   // ĐỒNG BỘ FAVORITE
@@ -229,53 +321,28 @@ function ProductDetailContent({ product }: ProductDetailContentProps) {
   // =====================================================
 
   function addToCart() {
+    // Kiểm tra kích thước trước khi thêm sản phẩm.
     if (product.sizes && product.sizes.length > 0 && !selectedSize) {
       window.alert("Vui lòng chọn kích thước sản phẩm.");
       return;
     }
 
-    const savedCart = localStorage.getItem(CART_STORAGE_KEY);
+    // Chỉ cho phép thêm vào giỏ hàng khi đã đăng nhập.
+    const session = getCustomerSession();
 
-    let cartItems: CartItem[] = [];
-
-    if (savedCart) {
-      try {
-        const parsed: unknown = JSON.parse(savedCart);
-
-        if (Array.isArray(parsed)) {
-          cartItems = parsed.filter(function (item): item is CartItem {
-            return (
-              typeof item === "object" &&
-              item !== null &&
-              "productId" in item &&
-              typeof item.productId === "number" &&
-              "quantity" in item &&
-              typeof item.quantity === "number"
-            );
-          });
-        }
-      } catch {
-        cartItems = [];
-      }
+    if (!session) {
+      window.alert("Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng.");
+      navigate("/login");
+      return;
     }
 
-    const existingItem = cartItems.find(function (item) {
-      return item.productId === product.id && item.size === selectedSize;
-    });
+    // Lưu sản phẩm vào giỏ hàng riêng của tài khoản hiện tại.
+    const success = addCartItem(product.id, selectedSize, quantity);
 
-    if (existingItem) {
-      existingItem.quantity += quantity;
-    } else {
-      cartItems.push({
-        productId: product.id,
-        size: selectedSize,
-        quantity,
-      });
+    if (!success) {
+      window.alert("Không thể thêm sản phẩm vào giỏ hàng. Vui lòng thử lại.");
+      return;
     }
-
-    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
-
-    window.dispatchEvent(new Event("cartUpdated"));
 
     window.alert("Đã thêm sản phẩm vào giỏ hàng.");
   }
@@ -932,87 +999,188 @@ function ProductDetailContent({ product }: ProductDetailContentProps) {
               </div>
 
               {/* REVIEWS */}
-
               <div className="mt-12">
-                <h2
-                  className="
-                  text-xl
-                  font-semibold
-                  text-[#2d261f]
-                "
-                >
+                <h2 className="text-xl font-semibold text-[#2d261f]">
                   Đánh giá về sản phẩm
                 </h2>
 
-                <div
-                  className="
-                  mt-5
-                  border
-                  border-[#ded7d0]
-                  bg-white
-                  p-6
-                "
-                >
-                  <div
-                    className="
-                    flex
-                    flex-col
-                    gap-6
-                    sm:flex-row
-                    sm:items-center
-                    sm:justify-between
-                  "
-                  >
+                <div className="mt-5 border border-[#ded7d0] bg-white p-6">
+                  <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <div
-                        className="
-                        text-3xl
-                        font-semibold
-                        text-[#2d261f]
-                      "
-                      >
-                        0.0
+                      <div className="text-3xl font-semibold text-[#2d261f]">
+                        {reviewSummary.average.toFixed(1)}
                       </div>
 
                       <div
-                        className="
-                          mt-1
-                          tracking-wide
-                          text-[#806b56]
-                        "
-                        aria-label="0 trên 5 sao"
+                        className="mt-1 tracking-wide text-[#b18a45]"
+                        aria-label={`${reviewSummary.average.toFixed(1)} trên 5 sao`}
                       >
-                        ☆☆☆☆☆
+                        {"★".repeat(Math.round(reviewSummary.average))}
+                        {"☆".repeat(5 - Math.round(reviewSummary.average))}
                       </div>
 
-                      <p
-                        className="
-                        mt-2
-                        text-sm
-                        text-[#806b56]
-                      "
-                      >
-                        Chưa có đánh giá
+                      <p className="mt-2 text-sm text-[#806b56]">
+                        {reviewSummary.count > 0
+                          ? `${reviewSummary.count} đánh giá`
+                          : "Chưa có đánh giá"}
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      className="
-                        border
-                        border-[#3b2f25]
-                        px-6
-                        py-3
-                        text-sm
-                        text-[#3b2f25]
-                        transition
-                        hover:bg-[#3b2f25]
-                        hover:text-white
-                      "
-                    >
-                      Viết đánh giá
-                    </button>
+                    {canWriteReview && !myReview && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowReviewForm((current) => !current);
+                          setReviewError("");
+                          setReviewSuccess("");
+                        }}
+                        className="border border-[#3b2f25] px-6 py-3 text-sm text-[#3b2f25] transition hover:bg-[#3b2f25] hover:text-white"
+                      >
+                        {showReviewForm ? "Đóng biểu mẫu" : "Viết đánh giá"}
+                      </button>
+                    )}
                   </div>
+
+                  {!getCustomerSession() && (
+                    <p className="mt-5 text-sm leading-6 text-[#806b56]">
+                      Vui lòng{" "}
+                      <Link
+                        to="/login"
+                        className="font-medium underline underline-offset-4 hover:text-[#3b2f25]"
+                      >
+                        đăng nhập
+                      </Link>{" "}
+                      để kiểm tra điều kiện viết đánh giá.
+                    </p>
+                  )}
+
+                  {getCustomerSession() && !canWriteReview && !myReview && (
+                    <p className="mt-5 text-sm leading-6 text-[#806b56]">
+                      Bạn có thể viết đánh giá sau khi đơn hàng chứa sản phẩm
+                      này được giao thành công.
+                    </p>
+                  )}
+
+                  {myReview && (
+                    <p className="mt-5 text-sm leading-6 text-[#806b56]">
+                      Bạn đã đánh giá sản phẩm này. Cảm ơn bạn đã chia sẻ trải
+                      nghiệm!
+                    </p>
+                  )}
+
+                  {reviewSuccess && (
+                    <p role="status" className="mt-4 text-sm text-green-700">
+                      {reviewSuccess}
+                    </p>
+                  )}
+
+                  {reviewError && (
+                    <p role="alert" className="mt-4 text-sm text-red-700">
+                      {reviewError}
+                    </p>
+                  )}
+
+                  {showReviewForm && canWriteReview && !myReview && (
+                    <form
+                      onSubmit={handleSubmitReview}
+                      className="mt-6 border-t border-[#ded7d0] pt-6"
+                    >
+                      <label className="block text-sm font-medium text-[#2d261f]">
+                        Mức độ hài lòng
+                      </label>
+
+                      <div
+                        className="mt-2 flex gap-2"
+                        role="group"
+                        aria-label="Chọn số sao"
+                      >
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            type="button"
+                            onClick={() => setReviewRating(star)}
+                            aria-label={`${star} sao`}
+                            aria-pressed={reviewRating === star}
+                            className={`text-2xl transition ${
+                              star <= reviewRating
+                                ? "text-[#b18a45]"
+                                : "text-[#cfc5bc]"
+                            }`}
+                          >
+                            ★
+                          </button>
+                        ))}
+                      </div>
+
+                      <label
+                        htmlFor="product-review-comment"
+                        className="mt-5 block text-sm font-medium text-[#2d261f]"
+                      >
+                        Nội dung đánh giá
+                      </label>
+
+                      <textarea
+                        id="product-review-comment"
+                        required
+                        minLength={3}
+                        maxLength={1000}
+                        rows={4}
+                        value={reviewComment}
+                        onChange={(event) =>
+                          setReviewComment(event.target.value)
+                        }
+                        placeholder="Chia sẻ trải nghiệm của bạn về sản phẩm..."
+                        className="mt-2 w-full resize-y border border-[#d8d0c8] bg-white px-3 py-3 text-sm text-[#2d261f] outline-none transition placeholder:text-[#a59a91] focus:border-[#3b2f25]"
+                      />
+
+                      <button
+                        type="submit"
+                        className="mt-4 bg-[#3b2f25] px-6 py-3 text-sm text-white transition hover:bg-[#594638]"
+                      >
+                        Gửi đánh giá
+                      </button>
+                    </form>
+                  )}
+                </div>
+
+                <div className="mt-5 space-y-4">
+                  {reviews.map((review) => (
+                    <article
+                      key={review.id}
+                      className="border border-[#ded7d0] bg-white p-5"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-[#2d261f]">
+                            {review.customerName}
+                          </p>
+                          <p className="mt-1 text-xs text-[#806b56]">
+                            {new Date(review.createdAt).toLocaleDateString(
+                              "vi-VN",
+                            )}
+                          </p>
+                        </div>
+
+                        <span
+                          className="tracking-wide text-[#b18a45]"
+                          aria-label={`${review.rating} trên 5 sao`}
+                        >
+                          {"★".repeat(review.rating)}
+                          {"☆".repeat(5 - review.rating)}
+                        </span>
+                      </div>
+
+                      <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-[#6f6257]">
+                        {review.comment}
+                      </p>
+                    </article>
+                  ))}
+
+                  {reviews.length === 0 && (
+                    <p className="py-4 text-sm text-[#806b56]">
+                      Sản phẩm chưa có đánh giá nào.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

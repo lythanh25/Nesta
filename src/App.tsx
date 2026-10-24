@@ -10,12 +10,34 @@ import Cart from "./pages/Cart/Cart";
 import Checkout from "./pages/Checkout/Checkout";
 import Profile from "./pages/Profile/Profile";
 import About from "./pages/About/About";
+import RequireAdmin from "./components/auth/RequireAdmin";
+import AdminLayout from "./components/layout/AdminLayout";
+import AdminLogin from "./pages/Admin/Login";
+import Dashboard from "./pages/Admin/Dashboard";
+import UserLogin from "./pages/Auth/Login";
+import UserRegister from "./pages/Auth/Register";
 
 function App() {
   return (
     <BrowserRouter basename="/Nesta">
       <ScrollToTop />
       <Routes>
+        {/* Tài khoản khách hàng */}
+        <Route path="/login" element={<UserLogin />} />
+        <Route path="/register" element={<UserRegister />} />
+
+        {/* Tài khoản Admin */}
+        <Route path="/admin/login" element={<AdminLogin />} />
+
+        {/* Khu vực quản trị được bảo vệ */}
+        <Route element={<RequireAdmin />}>
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<Dashboard />} />
+            {/* Các route Admin sẽ bổ sung tại đây */}
+          </Route>
+        </Route>
+
+        {/* Website khách hàng — giữ nguyên */}
         <Route element={<MainLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/products" element={<Products />} />

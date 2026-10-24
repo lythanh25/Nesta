@@ -1,19 +1,18 @@
 import { useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 
 import { getSizePrice, products, type Product } from "../../data/products";
+import { getCartItems, saveCartItems, type CartItem } from "../../utils/cart";
+import { getCustomerSession } from "../../utils/customerAuth";
 
-const CART_STORAGE_KEY = "nesta-cart";
 const PROFILE_STORAGE_KEY = "nesta-profile";
 const ADDRESS_STORAGE_KEY = "nesta-address";
 const ORDERS_STORAGE_KEY = "nesta-orders";
 const SHIPPING_FEE = 30_000;
 
-type CartItem = {
-  productId: number;
-  size?: string;
-  quantity: number;
-};
+function getUserOrdersKey(userId: string) {
+  return `${ORDERS_STORAGE_KEY}:${userId}`;
+}
 
 type ProfileInfo = {
   fullName: string;
@@ -83,28 +82,9 @@ function formatPrice(price: number) {
   return new Intl.NumberFormat("vi-VN").format(price);
 }
 
-function isCartItem(value: unknown): value is CartItem {
-  if (typeof value !== "object" || value === null) return false;
-
-  const item = value as Record<string, unknown>;
-  return (
-    typeof item.productId === "number" &&
-    Number.isFinite(item.productId) &&
-    typeof item.quantity === "number" &&
-    Number.isFinite(item.quantity) &&
-    Number.isInteger(item.quantity) &&
-    item.quantity > 0 &&
-    (item.size === undefined || typeof item.size === "string")
-  );
-}
-
-function readCartItems(): CartItem[] {
-  const saved = readStorage<unknown>(CART_STORAGE_KEY, []);
-  return Array.isArray(saved) ? saved.filter(isCartItem) : [];
-}
-
 function Checkout() {
-  const [cartItems, setCartItems] = useState<CartItem[]>(readCartItems);
+  const session = getCustomerSession();
+  const [cartItems, setCartItems] = useState<CartItem[]>(getCartItems);
   const [customer, setCustomer] = useState<CustomerInfo>(() => {
     const profile = readStorage<ProfileInfo>(PROFILE_STORAGE_KEY, {
       fullName: "",
@@ -172,6 +152,11 @@ function Checkout() {
     event.preventDefault();
     setError("");
 
+    if (!session) {
+      setError("Vui lòng đăng nhập trước khi thanh toán.");
+      return;
+    }
+
     if (cartProducts.length === 0) {
       setError("Giỏ hàng đang trống. Vui lòng chọn sản phẩm trước.");
       return;
@@ -221,15 +206,18 @@ function Checkout() {
         status: "Đã tiếp nhận",
       };
 
-      const savedOrders = readStorage<unknown>(ORDERS_STORAGE_KEY, []);
+      const userOrdersKey = getUserOrdersKey(session.id);
+      const savedOrders = readStorage<unknown>(userOrdersKey, []);
+
       if (!Array.isArray(savedOrders)) {
         throw new Error("Không đọc được danh sách đơn hàng.");
       }
 
       localStorage.setItem(
-        ORDERS_STORAGE_KEY,
+        userOrdersKey,
         JSON.stringify([order, ...savedOrders]),
       );
+
       window.dispatchEvent(new Event("ordersUpdated"));
 
       const oldProfile = readStorage<ProfileInfo>(PROFILE_STORAGE_KEY, {
@@ -258,10 +246,14 @@ function Checkout() {
       };
       localStorage.setItem(ADDRESS_STORAGE_KEY, JSON.stringify(addressToSave));
 
-      // Chỉ xóa giỏ hàng sau khi đơn hàng đã được ghi thành công.
-      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify([]));
+      // Chỉ xóa giỏ hàng của tài khoản hiện tại sau khi lưu đơn thành công.
+      const cartCleared = saveCartItems([]);
+
+      if (!cartCleared) {
+        throw new Error("Không thể cập nhật giỏ hàng.");
+      }
+
       setCartItems([]);
-      window.dispatchEvent(new Event("cartUpdated"));
       setSuccessOrder(order);
     } catch {
       setError(
@@ -270,6 +262,10 @@ function Checkout() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  if (!session) {
+    return <Navigate to="/login" replace />;
   }
 
   if (cartProducts.length === 0 && !successOrder) {
