@@ -23,6 +23,7 @@ import {
   getReviewSummary,
   type ProductReview,
 } from "../../utils/reviews";
+import { getStock, subscribeToStock, validateStock } from "../../utils/stock";
 
 import type { Product } from "../../data/products";
 
@@ -100,6 +101,24 @@ function ProductDetailContent({ product }: ProductDetailContentProps) {
   const [selectedSize, setSelectedSize] = useState<string | undefined>(
     undefined,
   );
+
+  const [stockVersion, setStockVersion] = useState(0);
+
+  useEffect(() => {
+    return subscribeToStock(() => {
+      setStockVersion((current) => current + 1);
+    });
+  }, []);
+
+  const selectedSizeStock =
+    product.sizes && product.sizes.length > 0
+      ? selectedSize
+        ? getStock(product.id, selectedSize)
+        : undefined
+      : getStock(product.id);
+
+  // Đảm bảo component cập nhật khi tồn kho thay đổi.
+  void stockVersion;
 
   const [isFavorite, setIsFavorite] = useState(function () {
     return isProductFavorite(product.id);
@@ -304,17 +323,29 @@ function ProductDetailContent({ product }: ProductDetailContentProps) {
   // QUANTITY
   // =====================================================
 
-  function decreaseQuantity() {
-    setQuantity(function (current) {
-      return Math.max(1, current - 1);
-    });
-  }
+  // function decreaseQuantity() {
+  //   setQuantity(function (current) {
+  //     return Math.max(1, current - 1);
+  //   });
+  // }
 
-  function increaseQuantity() {
-    setQuantity(function (current) {
-      return current + 1;
-    });
-  }
+  const increaseQuantity = () => {
+    // Phải chọn kích thước trước khi tăng số lượng.
+    if (product.sizes?.length && !selectedSize) {
+      alert("Vui lòng chọn kích thước trước.");
+      return;
+    }
+
+    if (selectedSizeStock === undefined || selectedSizeStock <= 0) {
+      return;
+    }
+
+    setQuantity((current) => Math.min(current + 1, selectedSizeStock));
+  };
+
+  const decreaseQuantity = () => {
+    setQuantity((current) => Math.max(1, current - 1));
+  };
 
   // =====================================================
   // ADD TO CART
@@ -333,6 +364,13 @@ function ProductDetailContent({ product }: ProductDetailContentProps) {
     if (!session) {
       window.alert("Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng.");
       navigate("/login");
+      return;
+    }
+
+    const stockValidation = validateStock(product.id, quantity, selectedSize);
+
+    if (!stockValidation.valid) {
+      alert(stockValidation.message || "Số lượng sản phẩm không đủ trong kho.");
       return;
     }
 
@@ -693,8 +731,9 @@ function ProductDetailContent({ product }: ProductDetailContentProps) {
                       <button
                         key={size.label}
                         type="button"
-                        onClick={function () {
+                        onClick={() => {
                           setSelectedSize(size.label);
+                          setQuantity(1);
                         }}
                         aria-pressed={isSelected}
                         className={`
@@ -752,6 +791,24 @@ function ProductDetailContent({ product }: ProductDetailContentProps) {
               </div>
             )}
 
+            {/* STOCK STATUS */}
+
+            <div className="mt-4" aria-live="polite">
+              {selectedSizeStock === undefined ? (
+                <p className="text-sm text-[#806b56]">
+                  Vui lòng chọn kích thước để xem số lượng còn hàng.
+                </p>
+              ) : selectedSizeStock > 0 ? (
+                <p className="text-sm font-medium text-[#477654]">
+                  Còn {selectedSizeStock} sản phẩm
+                </p>
+              ) : (
+                <p className="text-sm font-medium text-red-600">
+                  Kích thước này hiện đã hết hàng.
+                </p>
+              )}
+            </div>
+
             {/* QUANTITY */}
 
             <div className="mt-7">
@@ -779,11 +836,13 @@ function ProductDetailContent({ product }: ProductDetailContentProps) {
                   type="button"
                   onClick={decreaseQuantity}
                   aria-label="Giảm số lượng"
+                  disabled={quantity <= 1}
                   className="
                     px-4
                     py-2
                     transition
                     hover:bg-[#eeeae5]
+                    cursor-pointer
                   "
                 >
                   −
@@ -809,12 +868,23 @@ function ProductDetailContent({ product }: ProductDetailContentProps) {
                   type="button"
                   onClick={increaseQuantity}
                   aria-label="Tăng số lượng"
-                  className="
+                  disabled={
+                    selectedSizeStock === undefined ||
+                    selectedSizeStock <= 0 ||
+                    quantity >= selectedSizeStock
+                  }
+                  className={`
                     px-4
                     py-2
                     transition
                     hover:bg-[#eeeae5]
-                  "
+                  ${
+                    selectedSizeStock === undefined ||
+                    selectedSizeStock <= 0 ||
+                    quantity >= selectedSizeStock
+                      ? "cursor-not-allowed opacity-40"
+                      : "cursor-pointer"
+                  } `}
                 >
                   +
                 </button>

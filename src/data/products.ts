@@ -85,8 +85,12 @@ export type ProductSize = {
   width: number;
   length: number;
   height: number;
-  // Giá riêng cho size này (tùy chọn). Nếu bỏ trống, getSizePrice tự tính.
+
+  // Giá riêng của kích thước, nếu có.
   price?: number;
+
+  // Số lượng tồn kho của riêng kích thước này.
+  stock?: number;
 };
 
 export type Product = {
@@ -94,30 +98,30 @@ export type Product = {
   name: string;
   price: number;
 
-  // Giá gốc, dùng để xác định sản phẩm đang giảm giá
+  // Giá gốc để xác định chương trình giảm giá.
   originalPrice?: number;
 
-  // Tình trạng tồn kho
+  // Trạng thái còn hàng, được đồng bộ với dữ liệu tồn kho.
   inStock?: boolean;
+
+  // Tồn kho của sản phẩm không có các lựa chọn kích thước.
+  // Với sản phẩm có sizes, tồn kho được quản lý theo từng size.
+  stock?: number;
 
   category: ProductCategory;
   subcategory: string;
 
-  // Bộ lọc "THEO KHÔNG GIAN" - hỗ trợ nhiều phòng cho một sản phẩm.
+  // Một sản phẩm có thể xuất hiện ở nhiều không gian.
   rooms?: ProductRoom[];
 
   images: string[];
-
-  // Ảnh thay thế khi rê chuột vào thẻ sản phẩm
   hoverImage?: string;
 
   description: string;
   detailDescription?: string;
-
   specifications?: Record<string, string>;
 
   sizes?: ProductSize[];
-
   model3D?: string;
 };
 
@@ -131,6 +135,7 @@ function createSize(
   length: number,
   height: number,
   price?: number,
+  stock: number = 5,
 ): ProductSize {
   return {
     label,
@@ -138,6 +143,7 @@ function createSize(
     length,
     height,
     ...(price !== undefined ? { price } : {}),
+    stock: Math.max(0, Math.floor(stock)),
   };
 }
 
@@ -222,6 +228,7 @@ export const products: Product[] = [
     price: 5000000,
     originalPrice: 6000000,
     inStock: true,
+    stock: 10,
 
     category: "Giường",
     subcategory: "Giường ngủ",
@@ -246,8 +253,8 @@ export const products: Product[] = [
 
     sizes: [
       createSize("1m6", 160, 200, 100),
-      createSize("1m8", 180, 200, 100),
-      createSize("2m0", 200, 200, 100),
+      createSize("1m8", 180, 200, 100, undefined, 8),
+      createSize("2m0", 200, 200, 100, undefined, 10),
     ],
 
     model3D: getModel("Bed_1.glb"),
@@ -258,6 +265,7 @@ export const products: Product[] = [
     name: "Giường khung bo tròn xám rêu",
     price: 9800000,
     inStock: false,
+    stock: 0,
 
     category: "Giường",
     subcategory: "Giường ngủ",
@@ -289,6 +297,7 @@ export const products: Product[] = [
     id: 3,
     name: "Giường vải ",
     price: 8500000,
+    stock: 20,
 
     category: "Giường",
     subcategory: "Giường đôi",
@@ -319,6 +328,7 @@ export const products: Product[] = [
     id: 4,
     name: "Modern Leather Sofa",
     price: 6500000,
+    stock: 2,
 
     category: "Sofa",
     subcategory: "Sofa phòng khách",
@@ -353,6 +363,7 @@ export const products: Product[] = [
     id: 5,
     name: "Cream Fabric Sofa",
     price: 6500000,
+    stock: 5,
 
     category: "Sofa",
     subcategory: "Sofa phòng khách",
@@ -385,6 +396,7 @@ export const products: Product[] = [
     id: 6,
     name: "Modern Blue Gray Sofa",
     price: 8500000,
+    stock: 1,
 
     category: "Sofa",
     subcategory: "Sofa phòng khách",
@@ -1727,6 +1739,43 @@ export const products: Product[] = [
   },
 ];
 
+/**
+ * Chuẩn hóa tồn kho ban đầu.
+ *
+ * - Sản phẩm có sizes: quản lý tồn kho riêng từng kích thước.
+ * - Sản phẩm không có sizes: dùng product.stock.
+ * - DEFAULT_INITIAL_STOCK và DEFAULT_SIZE_STOCK chỉ là dữ liệu mẫu.
+ * - Tồn kho thực tế trong localStorage sẽ được stock.ts quản lý.
+ */
+const DEFAULT_INITIAL_STOCK = 10;
+const DEFAULT_SIZE_STOCK = 5;
+
+for (const product of products) {
+  if (product.sizes?.length) {
+    // Khởi tạo và chuẩn hóa tồn kho riêng của từng size.
+    for (const size of product.sizes) {
+      if (size.stock === undefined) {
+        size.stock = DEFAULT_SIZE_STOCK;
+      }
+
+      size.stock = Math.max(0, Math.floor(size.stock));
+    }
+
+    // Còn hàng nếu có ít nhất một size có tồn kho lớn hơn 0.
+    product.inStock = product.sizes.some((size) => (size.stock ?? 0) > 0);
+
+    continue;
+  }
+
+  // Sản phẩm không có kích thước lựa chọn.
+  if (product.stock === undefined) {
+    product.stock = product.inStock === false ? 0 : DEFAULT_INITIAL_STOCK;
+  }
+
+  product.stock = Math.max(0, Math.floor(product.stock));
+  product.inStock = product.stock > 0;
+}
+
 // =====================================================
 // GET PRODUCT BY ID
 // =====================================================
@@ -1782,7 +1831,7 @@ export function getProductsByCategory(category: ProductCategory): Product[] {
 
 // Chuẩn hóa danh sách không gian cho cả dữ liệu mới (rooms) và cũ (spaces).
 export function getProductRooms(product: Product): ProductRoom[] {
-  return product.rooms ?? product.rooms ?? [];
+  return product.rooms ?? [];
 }
 
 export function getProductsByRoom(room: ProductRoom): Product[] {

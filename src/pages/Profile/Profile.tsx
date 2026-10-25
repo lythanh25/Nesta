@@ -11,6 +11,8 @@ import {
 import { products } from "../../data/products";
 import type { Product } from "../../data/products";
 import { getFavoriteIds, toggleProductFavorite } from "../../utils/favorites";
+import { getStock, setMultipleStock } from "../../utils/stock";
+import type { StockUpdate } from "../../utils/stock";
 
 const PROFILE_STORAGE_KEY = "nesta-profile";
 const ADDRESS_STORAGE_KEY = "nesta-address";
@@ -204,6 +206,17 @@ function getOrderStatusClass(status: string) {
   }
 
   return "border-[#d5c8b7] bg-[#f7f1ed] text-[#6e5a47]";
+}
+
+function canCancelOrder(status: string): boolean {
+  const normalized = status.trim().toLocaleLowerCase("vi-VN");
+
+  return [
+    "đã tiếp nhận",
+    "chờ xác nhận",
+    "đang xử lý",
+    "đang chuẩn bị hàng",
+  ].includes(normalized);
 }
 
 function Profile() {
@@ -452,6 +465,122 @@ function Profile() {
     navigate("/login", { replace: true });
   }
 
+  function handleCancelOrder(orderId: string) {
+    clearMessages();
+
+    if (!session) {
+      setError("Vui lòng đăng nhập để hủy đơn hàng.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Bạn có chắc chắn muốn hủy đơn hàng này không? Số lượng sản phẩm sẽ được hoàn lại kho.",
+    );
+
+    if (!confirmed) return;
+
+    const userOrdersKey = getUserStorageKey(ORDERS_STORAGE_KEY, session.id);
+
+    // Đọc lại dữ liệu mới nhất để tránh hủy đơn đã được xử lý trước đó.
+    const latestOrders = readOrders(session.id, session.email);
+    const targetOrder = latestOrders.find((order) => order.id === orderId);
+
+    if (!targetOrder) {
+      setError("Không tìm thấy đơn hàng cần hủy.");
+      return;
+    }
+
+    if (!canCancelOrder(targetOrder.status || "")) {
+      setError("Đơn hàng này không còn được phép hủy.");
+      setOrders(latestOrders);
+      return;
+    }
+
+    // Gộp sản phẩm trùng ID và kích thước.
+    const quantityMap = new Map<string, StockUpdate>();
+
+    for (const item of targetOrder.items) {
+      const product = products.find((product) => product.id === item.productId);
+
+      if (
+        !product ||
+        !Number.isInteger(item.quantity) ||
+        item.quantity <= 0 ||
+        (product.sizes?.length && !item.size) ||
+        (!product.sizes?.length && item.size) ||
+        (item.size && !product.sizes?.some((size) => size.label === item.size))
+      ) {
+        setError(
+          "Không thể hoàn kho vì thông tin sản phẩm trong đơn hàng không hợp lệ.",
+        );
+        return;
+      }
+
+      const key = `${item.productId}::${item.size ?? ""}`;
+      const existing = quantityMap.get(key);
+
+      if (existing) {
+        existing.quantity += item.quantity;
+      } else {
+        quantityMap.set(key, {
+          productId: item.productId,
+          size: item.size,
+          quantity: item.quantity,
+        });
+      }
+    }
+
+    // Lưu tồn kho hiện tại để có thể khôi phục nếu không lưu được đơn.
+    const previousStock: StockUpdate[] = [];
+    const nextStock: StockUpdate[] = [];
+
+    for (const item of quantityMap.values()) {
+      const currentStock = getStock(item.productId, item.size);
+
+      previousStock.push({
+        productId: item.productId,
+        size: item.size,
+        quantity: currentStock,
+      });
+
+      nextStock.push({
+        productId: item.productId,
+        size: item.size,
+        quantity: currentStock + item.quantity,
+      });
+    }
+
+    // Hoàn kho trước, chỉ cập nhật đơn nếu thao tác thành công.
+    if (nextStock.length > 0 && !setMultipleStock(nextStock)) {
+      setError("Không thể hoàn lại tồn kho. Vui lòng thử lại.");
+      return;
+    }
+
+    const updatedOrders = latestOrders.map((order) =>
+      order.id === orderId ? { ...order, status: "Đã hủy" } : order,
+    );
+
+    try {
+      localStorage.setItem(userOrdersKey, JSON.stringify(updatedOrders));
+
+      setOrders(updatedOrders);
+      setMessage(
+        "Đã hủy đơn hàng thành công. Số lượng sản phẩm đã được hoàn lại kho.",
+      );
+
+      window.dispatchEvent(new Event("ordersUpdated"));
+    } catch {
+      // Nếu không lưu được trạng thái đơn, khôi phục tồn kho cũ.
+      const restored = setMultipleStock(previousStock);
+
+      setError(
+        restored
+          ? "Không thể lưu trạng thái đơn hàng. Tồn kho đã được khôi phục, vui lòng thử lại."
+          : "Không thể lưu trạng thái đơn hàng và khôi phục tồn kho tự động. Vui lòng kiểm tra lại dữ liệu tồn kho.",
+      );
+    }
+  }
+
   function getOrderItemProduct(item: OrderItem): Product | undefined {
     return products.find((product) => product.id === item.productId);
   }
@@ -459,7 +588,7 @@ function Profile() {
   if (!session) {
     return <Navigate to="/login" replace />;
   }
-  
+
   return (
     <main className="min-h-screen bg-[#f7f1ed] pb-14 md:pb-20">
       {/* TIÊU ĐỀ TRANG */}
@@ -983,11 +1112,23 @@ function Profile() {
                           </p>
                         </div>
 
-                        <span
-                          className={`shrink-0 border px-2.5 py-1 text-[10px] ${getOrderStatusClass(order.status || "")}`}
-                        >
-                          {order.status || "Đã đặt hàng"}
-                        </span>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          <span
+                            className={`shrink-0 border px-2.5 py-1 text-[10px] ${getOrderStatusClass(order.status || "")}`}
+                          >
+                            {order.status || "Đã đặt hàng"}
+                          </span>
+
+                          {canCancelOrder(order.status || "") && (
+                            <button
+                              type="button"
+                              onClick={() => handleCancelOrder(order.id)}
+                              className="border border-red-300 px-3 py-1.5 text-[10px] font-medium text-red-700 transition hover:bg-red-50"
+                            >
+                              HỦY ĐƠN HÀNG
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       {/* THÔNG TIN NHẬN HÀNG */}

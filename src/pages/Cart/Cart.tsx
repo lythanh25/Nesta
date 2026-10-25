@@ -5,6 +5,7 @@ import banner from "../../assets/banner.jpg";
 import deleteIcon from "../../assets/Delete.svg";
 import { getSizePrice, products, type Product } from "../../data/products";
 import { getCartItems, saveCartItems, type CartItem } from "../../utils/cart";
+import { getStock, subscribeToStock, validateStock } from "../../utils/stock";
 
 const SHIPPING_FEE = 30_000;
 
@@ -13,6 +14,8 @@ type CartProduct = {
   size?: string;
   quantity: number;
   unitPrice: number;
+  stockAvailable: number;
+  stockMessage?: string;
 };
 
 function formatPrice(price: number) {
@@ -49,6 +52,14 @@ function CartHero() {
 
 function Cart() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+
+  const [stockVersion, setStockVersion] = useState(0);
+
+  useEffect(() => {
+    return subscribeToStock(() => {
+      setStockVersion((current) => current + 1);
+    });
+  }, []);
 
   // =========================================================
   // LOAD CART
@@ -97,11 +108,26 @@ function Cart() {
   // =========================================================
 
   function increaseQuantity(productId: number, size?: string) {
+    const currentItem = cartItems.find((item) =>
+      isSameCartItem(item, productId, size),
+    );
+
+    if (!currentItem) return;
+
+    const nextQuantity = currentItem.quantity + 1;
+
+    const validation = validateStock(productId, nextQuantity, size);
+
+    if (!validation.valid) {
+      alert(validation.message || "Số lượng vượt quá tồn kho hiện có.");
+      return;
+    }
+
     const updatedItems = cartItems.map((item) => {
       if (isSameCartItem(item, productId, size)) {
         return {
           ...item,
-          quantity: item.quantity + 1,
+          quantity: nextQuantity,
         };
       }
 
@@ -148,6 +174,8 @@ function Cart() {
   // CART PRODUCTS
   // =========================================================
 
+  void stockVersion;
+
   const cartProducts: CartProduct[] = cartItems.flatMap((item) => {
     const product = products.find(
       (candidate) => candidate.id === item.productId,
@@ -157,21 +185,31 @@ function Cart() {
       return [];
     }
 
+    const hasSizeOptions = Boolean(product.sizes?.length);
+
     const selectedSize = product.sizes?.find(
       (sizeOption) => sizeOption.label === item.size,
     );
 
-    // Nếu size đã lưu không còn hợp lệ, không tự ý lấy
-    // giá của một kích thước khác.
-    const hasSizeOptions = Boolean(product.sizes?.length);
-
-    const hasInvalidSavedSize = Boolean(
-      item.size && hasSizeOptions && !selectedSize,
-    );
+    const hasInvalidSavedSize = hasSizeOptions && (!item.size || !selectedSize);
 
     const unitPrice = hasInvalidSavedSize
       ? product.price
       : getSizePrice(product, selectedSize);
+
+    const stockAvailable = hasInvalidSavedSize
+      ? 0
+      : getStock(product.id, item.size);
+
+    let stockMessage: string | undefined;
+
+    if (hasInvalidSavedSize) {
+      stockMessage = "Vui lòng chọn lại kích thước sản phẩm.";
+    } else if (stockAvailable <= 0) {
+      stockMessage = "Sản phẩm đã hết hàng.";
+    } else if (item.quantity > stockAvailable) {
+      stockMessage = `Giỏ hàng vượt tồn kho. Hiện chỉ còn ${stockAvailable} sản phẩm.`;
+    }
 
     return [
       {
@@ -179,8 +217,14 @@ function Cart() {
         size: item.size,
         quantity: item.quantity,
         unitPrice,
+        stockAvailable,
+        stockMessage,
       },
     ];
+  });
+
+  const hasStockIssue = cartProducts.some((item) => {
+    return Boolean(item.stockMessage);
   });
 
   // =========================================================
@@ -284,6 +328,8 @@ function Cart() {
                   size,
                   quantity,
                   unitPrice,
+                  stockAvailable,
+                  stockMessage,
                 }) {
                   return (
                     <article
@@ -357,6 +403,14 @@ function Cart() {
                             {formatPrice(unitPrice)} VNĐ
                           </p>
 
+                          <p
+                            className={`mt-1 text-[10px] md:text-xs ${
+                              stockMessage ? "text-red-600" : "text-[#477654]"
+                            }`}
+                          >
+                            {stockMessage || `Còn ${stockAvailable} sản phẩm`}
+                          </p>
+
                           <p className="mt-1 text-[10px] text-[#756b63] md:text-xs">
                             Thành tiền:{" "}
                             <span className="font-semibold text-[#3b2f25]">
@@ -408,6 +462,10 @@ function Cart() {
                           <button
                             type="button"
                             onClick={() => increaseQuantity(product.id, size)}
+                            disabled={
+                              Boolean(stockMessage) ||
+                              quantity >= stockAvailable
+                            }
                             className="
                               flex
                               h-7
@@ -418,6 +476,8 @@ function Cart() {
                               text-[#3b2f25]
                               transition
                               hover:bg-[#eee8e3]
+                              disabled:cursor-not-allowed
+                              disabled:opacity-40
                             "
                             aria-label={`Tăng số lượng ${product.name}`}
                           >
@@ -587,27 +647,53 @@ function Cart() {
                   Tiếp tục mua hàng
                 </Link>
 
-                <Link
-                  to="/checkout"
-                  className="
-                    flex
-                    h-9
-                    items-center
-                    justify-center
-                    bg-[#3b2f25]
-                    px-2
-                    text-center
-                    text-[9px]
-                    font-medium
-                    uppercase
-                    tracking-wide
-                    text-white
-                    transition
-                    hover:bg-[#594638]
-                  "
-                >
-                  Đặt hàng
-                </Link>
+                {hasStockIssue ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="
+      flex
+      h-9
+      cursor-not-allowed
+      items-center
+      justify-center
+      bg-[#3b2f25]
+      px-2
+      text-center
+      text-[9px]
+      font-medium
+      uppercase
+      tracking-wide
+      text-white
+      opacity-50
+    "
+                    title="Vui lòng kiểm tra lại tồn kho trước khi đặt hàng"
+                  >
+                    Đặt hàng
+                  </button>
+                ) : (
+                  <Link
+                    to="/checkout"
+                    className="
+                      flex
+                      h-9
+                      items-center
+                      justify-center
+                      bg-[#3b2f25]
+                      px-2
+                      text-center
+                      text-[9px]
+                      font-medium
+                      uppercase
+                      tracking-wide
+                      text-white
+                      transition
+                      hover:bg-[#594638]
+                    "
+                  >
+                    Đặt hàng
+                  </Link>
+                )}
               </div>
             </aside>
           </div>

@@ -4,11 +4,26 @@ import { Link, Navigate } from "react-router-dom";
 import { getSizePrice, products, type Product } from "../../data/products";
 import { getCartItems, saveCartItems, type CartItem } from "../../utils/cart";
 import { getCustomerSession } from "../../utils/customerAuth";
+import {
+  deductStock,
+  increaseStock,
+  validateStock,
+  validateStockItems,
+  type StockOrderItem,
+} from "../../utils/stock";
 
+const SHIPPING_FEE = 30_000;
 const PROFILE_STORAGE_KEY = "nesta-profile";
 const ADDRESS_STORAGE_KEY = "nesta-address";
 const ORDERS_STORAGE_KEY = "nesta-orders";
-const SHIPPING_FEE = 30_000;
+
+function getUserProfileKey(userId: string) {
+  return `${PROFILE_STORAGE_KEY}:${userId}`;
+}
+
+function getUserAddressKey(userId: string) {
+  return `${ADDRESS_STORAGE_KEY}:${userId}`;
+}
 
 function getUserOrdersKey(userId: string) {
   return `${ORDERS_STORAGE_KEY}:${userId}`;
@@ -86,20 +101,37 @@ function Checkout() {
   const session = getCustomerSession();
   const [cartItems, setCartItems] = useState<CartItem[]>(getCartItems);
   const [customer, setCustomer] = useState<CustomerInfo>(() => {
-    const profile = readStorage<ProfileInfo>(PROFILE_STORAGE_KEY, {
-      fullName: "",
-      email: "",
-      phone: "",
-      birthday: "",
-    });
-    const address = readStorage<AddressInfo>(ADDRESS_STORAGE_KEY, {
-      recipient: "",
-      phone: "",
-      city: "",
-      district: "",
-      ward: "",
-      address: "",
-    });
+    const profile = session
+      ? readStorage<ProfileInfo>(getUserProfileKey(session.id), {
+          fullName: "",
+          email: "",
+          phone: "",
+          birthday: "",
+        })
+      : {
+          fullName: "",
+          email: "",
+          phone: "",
+          birthday: "",
+        };
+
+    const address = session
+      ? readStorage<AddressInfo>(getUserAddressKey(session.id), {
+          recipient: "",
+          phone: "",
+          city: "",
+          district: "",
+          ward: "",
+          address: "",
+        })
+      : {
+          recipient: "",
+          phone: "",
+          city: "",
+          district: "",
+          ward: "",
+          address: "",
+        };
 
     return {
       fullName: address.recipient || profile.fullName || "",
@@ -112,6 +144,7 @@ function Checkout() {
       note: "",
     };
   });
+
   const [paymentMethod, setPaymentMethod] = useState<"cod" | "bank">("cod");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState("");
@@ -132,6 +165,18 @@ function Checkout() {
 
     return [{ product, size: item.size, quantity: item.quantity, unitPrice }];
   });
+
+  const stockItems: StockOrderItem[] = cartProducts.map(
+    ({ product, size, quantity }) => ({
+      productId: product.id,
+      quantity,
+      ...(size ? { size } : {}),
+    }),
+  );
+
+  const stockValidation = validateStockItems(stockItems);
+
+  const hasStockIssue = !stockValidation.valid;
 
   const subtotal = cartProducts.reduce(
     (sum, item) => sum + item.unitPrice * item.quantity,
@@ -169,6 +214,7 @@ function Checkout() {
 
     const invalidSize = cartProducts.some(({ product, size }) => {
       if (!product.sizes?.length) return false;
+
       return !size || !product.sizes.some((option) => option.label === size);
     });
 
@@ -179,7 +225,45 @@ function Checkout() {
       return;
     }
 
+    // Kiểm tra tồn kho trước khi bắt đầu tạo đơn.
+    const latestCartItems = getCartItems();
+
+    const cartChanged =
+      latestCartItems.length !== cartItems.length ||
+      latestCartItems.some((item, index) => {
+        const current = cartItems[index];
+
+        return (
+          !current ||
+          item.productId !== current.productId ||
+          item.size !== current.size ||
+          item.quantity !== current.quantity
+        );
+      });
+
+    if (cartChanged) {
+      setCartItems(latestCartItems);
+      setError(
+        "Giỏ hàng vừa thay đổi. Vui lòng kiểm tra lại sản phẩm và đặt hàng lần nữa.",
+      );
+      return;
+    }
+
+    const latestValidation = validateStockItems(stockItems);
+
+    if (!latestValidation.valid) {
+      setError(
+        latestValidation.message ||
+          "Tồn kho không đủ cho đơn hàng. Vui lòng quay lại giỏ hàng để điều chỉnh số lượng.",
+      );
+      return;
+    }
+
     setIsSubmitting(true);
+
+    let deductedItems: StockOrderItem[] = [];
+    let savedOrderId: string | null = null;
+    let cartWasCleared = false;
 
     try {
       const orderItems: OrderItem[] = cartProducts.map(
@@ -187,7 +271,6 @@ function Checkout() {
           productId: product.id,
           name: product.name,
           image: product.images[0] ?? "",
-          // Lưu giá đơn vị đã áp dụng kích thước để lịch sử đơn hàng đúng giá.
           price: unitPrice,
           quantity,
           ...(size ? { size } : {}),
@@ -213,21 +296,40 @@ function Checkout() {
         throw new Error("Không đọc được danh sách đơn hàng.");
       }
 
+      // Trừ kho trước khi ghi nhận đơn hàng.
+      // deductStock kiểm tra lại tồn kho và chỉ trừ khi toàn bộ đơn hợp lệ.
+      const deduction = deductStock(stockItems);
+
+      if (!deduction.valid) {
+        setError(
+          deduction.message ||
+            "Tồn kho vừa thay đổi. Vui lòng kiểm tra lại giỏ hàng.",
+        );
+        return;
+      }
+
+      deductedItems = [...stockItems];
+
       localStorage.setItem(
         userOrdersKey,
         JSON.stringify([order, ...savedOrders]),
       );
+      savedOrderId = order.id;
 
       window.dispatchEvent(new Event("ordersUpdated"));
 
-      const oldProfile = readStorage<ProfileInfo>(PROFILE_STORAGE_KEY, {
-        fullName: "",
-        email: "",
-        phone: "",
-        birthday: "",
-      });
+      const oldProfile = readStorage<ProfileInfo>(
+        getUserProfileKey(session.id),
+        {
+          fullName: "",
+          email: "",
+          phone: "",
+          birthday: "",
+        },
+      );
+
       localStorage.setItem(
-        PROFILE_STORAGE_KEY,
+        getUserProfileKey(session.id),
         JSON.stringify({
           ...oldProfile,
           fullName: customer.fullName,
@@ -244,20 +346,61 @@ function Checkout() {
         ward: customer.ward,
         address: customer.address,
       };
-      localStorage.setItem(ADDRESS_STORAGE_KEY, JSON.stringify(addressToSave));
 
-      // Chỉ xóa giỏ hàng của tài khoản hiện tại sau khi lưu đơn thành công.
+      localStorage.setItem(
+        getUserAddressKey(session.id),
+        JSON.stringify(addressToSave),
+      );
+
+      // Chỉ xóa giỏ hàng sau khi đơn đã được lưu.
       const cartCleared = saveCartItems([]);
 
       if (!cartCleared) {
         throw new Error("Không thể cập nhật giỏ hàng.");
       }
 
+      cartWasCleared = true;
+
       setCartItems([]);
       setSuccessOrder(order);
     } catch {
+      // Nếu quy trình lưu đơn bị lỗi, cố gắng khôi phục tồn kho.
+      for (const item of deductedItems) {
+        increaseStock(item.productId, item.quantity, item.size);
+      }
+
+      // Xóa đơn vừa ghi nếu quy trình chưa hoàn tất.
+      if (savedOrderId) {
+        const userOrdersKey = getUserOrdersKey(session.id);
+        const savedOrders = readStorage<unknown>(userOrdersKey, []);
+
+        if (Array.isArray(savedOrders)) {
+          localStorage.setItem(
+            userOrdersKey,
+            JSON.stringify(
+              savedOrders.filter(
+                (order) =>
+                  !order ||
+                  typeof order !== "object" ||
+                  !("id" in order) ||
+                  order.id !== savedOrderId,
+              ),
+            ),
+          );
+
+          window.dispatchEvent(new Event("ordersUpdated"));
+        }
+      }
+
+      // Nếu giỏ hàng đã bị xóa nhưng quy trình gặp lỗi,
+      // cố gắng khôi phục các mặt hàng ban đầu.
+      if (cartWasCleared) {
+        saveCartItems(cartItems);
+        setCartItems(cartItems);
+      }
+
       setError(
-        "Chưa thể lưu đơn hàng. Vui lòng kiểm tra bộ nhớ trình duyệt và thử lại.",
+        "Chưa thể hoàn tất đơn hàng. Tồn kho và giỏ hàng đã được kiểm tra lại; vui lòng thử lại.",
       );
     } finally {
       setIsSubmitting(false);
@@ -524,6 +667,28 @@ function Checkout() {
                     <p className="mt-1 text-[9px] text-[#756b63]">
                       Đơn giá: {formatPrice(unitPrice)} VNĐ
                     </p>
+
+                    {(() => {
+                      const validation = validateStock(
+                        product.id,
+                        quantity,
+                        size,
+                      );
+
+                      if (validation.valid) {
+                        return (
+                          <p className="mt-1 text-[9px] text-[#477654]">
+                            Còn đủ số lượng trong kho
+                          </p>
+                        );
+                      }
+
+                      return (
+                        <p className="mt-1 text-[9px] leading-4 text-red-600">
+                          {validation.message || "Số lượng không đủ trong kho."}
+                        </p>
+                      );
+                    })()}
                   </div>
                 </div>
               ))}
@@ -566,8 +731,25 @@ function Checkout() {
             <button
               type="submit"
               form="checkout-form"
-              disabled={isSubmitting}
-              className="mt-4 flex h-10 w-full items-center justify-center bg-[#3b2f25] px-4 text-[10px] font-medium tracking-wide text-white transition hover:bg-[#594638] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isSubmitting || hasStockIssue}
+              className="
+                mt-4
+                flex
+                h-10
+                w-full
+                items-center
+                justify-center
+                bg-[#3b2f25]
+                px-4
+                text-[10px]
+                font-medium
+                tracking-wide
+                text-white
+                transition
+                hover:bg-[#594638]
+                disabled:cursor-not-allowed
+                disabled:opacity-50
+              "
             >
               {isSubmitting ? "ĐANG XỬ LÝ..." : "ĐẶT MUA"}
             </button>

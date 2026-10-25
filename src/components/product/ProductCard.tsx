@@ -12,6 +12,12 @@ import {
 
 import { addCartItem } from "../../utils/cart";
 import { getCustomerSession } from "../../utils/customerAuth";
+import {
+  getStock,
+  isInStock,
+  subscribeToStock,
+  validateStock,
+} from "../../utils/stock";
 
 type ProductCardProps = {
   product: Product;
@@ -72,6 +78,33 @@ function ProductCard({ product }: ProductCardProps) {
 
   const mainImage = product.images[0];
   const hoverImage = product.hoverImage;
+  const hasSizes = Boolean(product.sizes?.length);
+
+  // =====================================================
+  // STOCK
+  // =====================================================
+
+  const [stockAvailable, setStockAvailable] = useState(() =>
+    hasSizes
+      ? product.sizes!.some((size) => getStock(product.id, size.label) > 0)
+      : isInStock(product.id),
+  );
+
+  useEffect(() => {
+    function refreshStock() {
+      const available = product.sizes?.length
+        ? product.sizes.some((size) => getStock(product.id, size.label) > 0)
+        : isInStock(product.id);
+
+      setStockAvailable(available);
+    }
+
+    refreshStock();
+
+    return subscribeToStock(() => {
+      refreshStock();
+    });
+  }, [product.id, product.sizes]);
 
   // =====================================================
   // ADD TO CART
@@ -86,11 +119,26 @@ function ProductCard({ product }: ProductCardProps) {
       return;
     }
 
-    // Nếu sản phẩm có nhiều kích thước, chọn kích thước đầu tiên
-    // làm mặc định, tương thích với Cart và ProductDetail.
-    const defaultSize = product.sizes?.[0]?.label;
+    // Sản phẩm có size: yêu cầu người dùng chọn size ở trang chi tiết.
+    if (hasSizes) {
+      if (!stockAvailable) {
+        alert("Sản phẩm hiện đã hết hàng.");
+        return;
+      }
 
-    const success = addCartItem(product.id, defaultSize, 1);
+      navigate(`/products/${product.id}`);
+      return;
+    }
+
+    // Sản phẩm không có size: kiểm tra tồn kho trước khi thêm.
+    const validation = validateStock(product.id, 1);
+
+    if (!validation.valid) {
+      alert(validation.message ?? "Sản phẩm hiện không đủ hàng.");
+      return;
+    }
+
+    const success = addCartItem(product.id, undefined, 1);
 
     if (!success) {
       alert("Không thể thêm sản phẩm vào giỏ hàng. Vui lòng thử lại.");
@@ -189,6 +237,21 @@ function ProductCard({ product }: ProductCardProps) {
             Giảm giá
           </span>
         )}
+
+        {/* OUT OF STOCK */}
+
+        {!stockAvailable && (
+          <span
+            className="
+              absolute bottom-2 left-2
+              rounded-[3px] bg-black/70
+              px-2 py-1 text-[9px]
+              font-medium text-white
+            "
+          >
+            Hết hàng
+          </span>
+        )}
       </div>
 
       {/* PRODUCT INFORMATION */}
@@ -244,7 +307,14 @@ function ProductCard({ product }: ProductCardProps) {
           <button
             type="button"
             onClick={addToCart}
-            aria-label={`Thêm ${product.name} vào giỏ hàng`}
+            disabled={!stockAvailable}
+            aria-label={
+              !stockAvailable
+                ? `${product.name} đã hết hàng`
+                : hasSizes
+                  ? `Chọn kích thước ${product.name}`
+                  : `Thêm ${product.name} vào giỏ hàng`
+            }
             className="
               flex h-[24px] shrink-0 cursor-pointer
               items-center justify-center gap-1
@@ -252,10 +322,11 @@ function ProductCard({ product }: ProductCardProps) {
               px-2 text-[8px] font-medium leading-none
               text-white transition-colors
               hover:bg-[#3b2f25]
+              disabled:cursor-not-allowed disabled:opacity-50
               sm:h-[25px] sm:px-2.5 sm:text-[9px]
             "
           >
-            <span>Giỏ hàng</span>
+            <span>{hasSizes ? "Chọn size" : "Giỏ hàng"}</span>
 
             <img
               src={shoppingCart}
