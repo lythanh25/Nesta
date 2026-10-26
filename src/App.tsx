@@ -16,6 +16,7 @@ import AdminLogin from "./pages/Admin/Login";
 import Dashboard from "./pages/Admin/Dashboard";
 import UserLogin from "./pages/Auth/Login";
 import UserRegister from "./pages/Auth/Register";
+import AdminProducts from "./pages/Admin/AdminProducts";
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
         <Route element={<RequireAdmin />}>
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Dashboard />} />
+            <Route path="products" element={<AdminProducts />} />
             {/* Các route Admin sẽ bổ sung tại đây */}
           </Route>
         </Route>

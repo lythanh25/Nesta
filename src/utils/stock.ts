@@ -1,4 +1,5 @@
-import { products, type Product } from "../data/products";
+import type { Product } from "../data/products";
+import { getProducts } from "./productStorage";
 
 // =========================================================
 // 1. CONSTANTS & TYPES
@@ -56,7 +57,7 @@ function isBrowser(): boolean {
 }
 
 export function getStockProduct(productId: number): Product | undefined {
-  return products.find((product) => product.id === productId);
+  return getProducts().find((product) => product.id === productId);
 }
 
 /**
@@ -94,15 +95,21 @@ function getStockKey(productId: number, size?: string): string | null {
 }
 
 /**
- * Lấy tồn kho mặc định trong products.ts.
+ * Lấy tồn kho mặc định từ danh sách sản phẩm hiện tại.
  *
  * Sản phẩm có size: lấy stock của đúng size.
  * Sản phẩm không có size: lấy product.stock.
  */
+
 export function getInitialStock(productId: number, size?: string): number {
   const product = getStockProduct(productId);
 
   if (!product) {
+    return 0;
+  }
+
+  // Sản phẩm đã được đánh dấu hết hàng thì tồn kho mặc định bằng 0.
+  if (product.inStock === false) {
     return 0;
   }
 
@@ -124,7 +131,7 @@ export function getInitialStock(productId: number, size?: string): number {
     return normalizeStock(product.stock);
   }
 
-  return product.inStock === false ? 0 : 10;
+  return 10;
 }
 
 // =========================================================
@@ -138,17 +145,14 @@ export function getInitialStock(productId: number, size?: string): number {
  * Dữ liệu cũ dạng productId sẽ bị bỏ qua cho các sản phẩm có size,
  * tránh lấy tồn kho tổng cũ áp dụng nhầm cho từng kích thước.
  */
+
 export function getStockMap(): StockMap {
-  if (!isBrowser()) {
-    return {};
-  }
+  if (!isBrowser()) return {};
 
   try {
     const raw = window.localStorage.getItem(STOCK_STORAGE_KEY);
 
-    if (!raw) {
-      return {};
-    }
+    if (!raw) return {};
 
     const parsed: unknown = JSON.parse(raw);
 
@@ -160,14 +164,18 @@ export function getStockMap(): StockMap {
       return {};
     }
 
+    // Chỉ đọc danh mục một lần cho toàn bộ lượt kiểm tra.
+    const products = getProducts();
+    const productsById = new Map(
+      products.map((product) => [product.id, product]),
+    );
+
     const result: StockMap = {};
 
     for (const [key, value] of Object.entries(parsed)) {
       const stock = Number(value);
 
-      if (!Number.isFinite(stock) || stock < 0) {
-        continue;
-      }
+      if (!Number.isFinite(stock) || stock < 0) continue;
 
       const normalized = Math.floor(stock);
       const sizeKeyMatch = key.match(/^(\d+)::(.+)$/);
@@ -175,7 +183,7 @@ export function getStockMap(): StockMap {
       if (sizeKeyMatch) {
         const productId = Number(sizeKeyMatch[1]);
         const size = sizeKeyMatch[2];
-        const product = getStockProduct(productId);
+        const product = productsById.get(productId);
 
         if (
           !product?.sizes?.length ||
@@ -188,17 +196,12 @@ export function getStockMap(): StockMap {
         continue;
       }
 
-      // Khóa dạng productId chỉ hợp lệ với sản phẩm không có size.
-      if (!/^\d+$/.test(key)) {
-        continue;
-      }
+      if (!/^\d+$/.test(key)) continue;
 
       const productId = Number(key);
-      const product = getStockProduct(productId);
+      const product = productsById.get(productId);
 
-      if (!product || product.sizes?.length) {
-        continue;
-      }
+      if (!product || product.sizes?.length) continue;
 
       result[key] = normalized;
     }
@@ -320,7 +323,7 @@ export function getAllStock(): StockMap {
   const savedStock = getStockMap();
   const result: StockMap = {};
 
-  for (const product of products) {
+  for (const product of getProducts()) {
     if (product.sizes?.length) {
       for (const size of product.sizes) {
         const key = `${product.id}::${size.label}`;
@@ -602,6 +605,48 @@ export function setMultipleStock(updates: StockUpdate[]): boolean {
   return true;
 }
 
+export function removeStockForProduct(productId: number): boolean {
+  if (!isBrowser() || !Number.isInteger(productId) || productId <= 0) {
+    return false;
+  }
+
+  try {
+    const stockMap = getStockMap();
+    const prefix = `${productId}::`;
+    const changes: StockChange[] = [];
+
+    for (const [key, previousStock] of Object.entries(stockMap)) {
+      if (key === String(productId)) {
+        changes.push({
+          productId,
+          previousStock,
+          stock: 0,
+        });
+        delete stockMap[key];
+      } else if (key.startsWith(prefix)) {
+        const size = key.slice(prefix.length);
+
+        changes.push({
+          productId,
+          size,
+          previousStock,
+          stock: 0,
+        });
+
+        delete stockMap[key];
+      }
+    }
+
+    if (!persistStockMap(stockMap)) return false;
+
+    notifyStockUpdated(changes);
+    return true;
+  } catch (error) {
+    console.error("Không thể xóa dữ liệu tồn kho của sản phẩm:", error);
+    return false;
+  }
+}
+
 // =========================================================
 // 7. DEDUCT STOCK - CHECKOUT
 // =========================================================
@@ -736,7 +781,7 @@ export function subscribeToStock(
 
 /**
  * Xóa dữ liệu tồn kho đã lưu.
- * Lần đọc tiếp theo sẽ dùng lại giá trị mặc định trong products.ts.
+ * Lần đọc tiếp theo sẽ dùng lại giá trị mặc định của danh sách sản phẩm hiện tại.
  */
 export function resetStock(): boolean {
   if (!isBrowser()) {
@@ -750,7 +795,7 @@ export function resetStock(): boolean {
 
     const changes: StockChange[] = [];
 
-    for (const product of products) {
+    for (const product of getProducts()) {
       if (product.sizes?.length) {
         for (const size of product.sizes) {
           const key = `${product.id}::${size.label}`;

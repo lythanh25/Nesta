@@ -1,11 +1,13 @@
+import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import ProductGrid from "../../components/product/ProductGrid";
 import {
-  products,
   getProductRooms,
+  type Product,
   type ProductRoom,
 } from "../../data/products";
+import { getProducts, subscribeToProducts } from "../../utils/productStorage";
 
 import Living from "../../assets/images/spaces/living-room.jpg";
 import Bedroom from "../../assets/images/spaces/bedroom.jpg";
@@ -94,6 +96,18 @@ function formatPrice(value: number): string {
 
 function Products() {
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const [products, setProducts] = useState<Product[]>(() => getProducts());
+
+  useEffect(() => {
+    const refreshProducts = () => {
+      setProducts(getProducts());
+    };
+
+    const unsubscribe = subscribeToProducts(refreshProducts);
+
+    return unsubscribe;
+  }, []);
 
   // =========================================================
   // URL PARAMETERS
