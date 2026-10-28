@@ -410,11 +410,7 @@ export default function AdminProducts() {
         <AdminProductForm
           product={editingProduct}
           onCancel={closeForm}
-          onSaved={() => {
-            refreshProducts();
-            refreshStock();
-            closeForm();
-          }}
+          onSaved={closeForm}
         />
       )}
     </div>

@@ -14,7 +14,7 @@ import {
 } from "../../utils/productStorage";
 import {
   getStock,
-  setMultipleStock,
+  replaceStockForProduct,
   type StockUpdate,
 } from "../../utils/stock";
 
@@ -145,7 +145,7 @@ export default function AdminProductForm({
       .join("\n") ?? "",
   );
   const [stockText, setStockText] = useState(
-    String(product && !product.sizes?.length ? getStock(product.id) : 10),
+    String(product ? (product.sizes?.length ? 0 : getStock(product.id)) : 10),
   );
   const initialSizesTextRef = useRef(sizesText);
   const initialStockTextRef = useRef(stockText);
@@ -298,11 +298,16 @@ export default function AdminProductForm({
               size: size.label,
               quantity: size.stock ?? 0,
             }))
-          : [{ productId: id, quantity: parsedStock }];
+          : [
+              {
+                productId: id,
+                quantity: parsedStock,
+              },
+            ];
 
-        if (!setMultipleStock(stockUpdates)) {
+        if (!replaceStockForProduct(id, stockUpdates)) {
           setError(
-            "Thông tin sản phẩm đã lưu nhưng chưa cập nhật được tồn kho. Vui lòng kiểm tra lại tồn kho.",
+            "Thông tin sản phẩm đã lưu nhưng chưa đồng bộ được tồn kho. Vui lòng kiểm tra lại.",
           );
           return;
         }

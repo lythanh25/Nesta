@@ -4,11 +4,12 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import Product3DViewer from "../../components/product/Product3DViewer";
 import ProductGrid from "../../components/product/ProductGrid";
 import {
-  getProductById,
   getSizePrice,
   getSizeOriginalPrice,
-  products,
+  type Product,
 } from "../../data/products";
+
+import { getProducts, subscribeToProducts } from "../../utils/productStorage";
 import {
   isProductFavorite,
   toggleProductFavorite,
@@ -25,7 +26,7 @@ import {
 } from "../../utils/reviews";
 import { getStock, subscribeToStock, validateStock } from "../../utils/stock";
 
-import type { Product } from "../../data/products";
+// import type { Product } from "../../data/products";
 
 // =====================================================
 // PRODUCT DETAIL
@@ -34,11 +35,22 @@ import type { Product } from "../../data/products";
 function ProductDetail() {
   const { id } = useParams();
 
-  const product = getProductById(Number(id));
+  const [products, setProducts] = useState<Product[]>(() => getProducts());
 
-  // ===================================================
-  // KHÔNG TÌM THẤY SẢN PHẨM
-  // ===================================================
+  useEffect(() => {
+    const refreshProducts = () => {
+      setProducts(getProducts());
+    };
+
+    const unsubscribe = subscribeToProducts(refreshProducts);
+
+    // Đồng bộ lại dữ liệu khi component được khởi tạo.
+    refreshProducts();
+
+    return unsubscribe;
+  }, []);
+
+  const product = products.find((item) => item.id === Number(id));
 
   if (!product) {
     return (
@@ -55,17 +67,7 @@ function ProductDetail() {
 
           <Link
             to="/products"
-            className="
-              mt-6
-              inline-block
-              bg-[#3b2f25]
-              px-6
-              py-3
-              text-sm
-              text-white
-              transition
-              hover:bg-[#594638]
-            "
+            className="mt-6 inline-block bg-[#3b2f25] px-6 py-3 text-sm text-white transition hover:bg-[#594638]"
           >
             Quay lại sản phẩm
           </Link>
@@ -74,14 +76,13 @@ function ProductDetail() {
     );
   }
 
-  /*
-   * Sau khi qua if trên, TypeScript biết chắc product
-   * là Product.
-   *
-   * Toàn bộ Hooks nằm trong component con.
-   */
-
-  return <ProductDetailContent key={product.id} product={product} />;
+  return (
+    <ProductDetailContent
+      key={product.id}
+      product={product}
+      allProducts={products}
+    />
+  );
 }
 
 // =====================================================
@@ -90,9 +91,13 @@ function ProductDetail() {
 
 type ProductDetailContentProps = {
   product: Product;
+  allProducts: Product[];
 };
 
-function ProductDetailContent({ product }: ProductDetailContentProps) {
+function ProductDetailContent({
+  product,
+  allProducts,
+}: ProductDetailContentProps) {
   const navigate = useNavigate();
   const [selectedImage, setSelectedImage] = useState(0);
 
@@ -267,8 +272,8 @@ function ProductDetailContent({ product }: ProductDetailContentProps) {
   // RELATED PRODUCTS
   // =====================================================
 
-  const relatedProducts = products
-    .filter(function (item) {
+  const relatedProducts = allProducts
+    .filter((item) => {
       return item.id !== product.id && item.category === product.category;
     })
     .slice(0, 4);

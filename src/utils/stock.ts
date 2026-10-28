@@ -328,7 +328,8 @@ export function getAllStock(): StockMap {
       for (const size of product.sizes) {
         const key = `${product.id}::${size.label}`;
 
-        result[key] = savedStock[key] ?? normalizeStock(size.stock ?? 0);
+        result[key] =
+          savedStock[key] ?? getInitialStock(product.id, size.label);
       }
     } else {
       const key = String(product.id);
@@ -611,38 +612,205 @@ export function removeStockForProduct(productId: number): boolean {
   }
 
   try {
-    const stockMap = getStockMap();
+    const raw = window.localStorage.getItem(STOCK_STORAGE_KEY);
+
+    if (!raw) {
+      return true;
+    }
+
+    const parsed: unknown = JSON.parse(raw);
+
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+      return false;
+    }
+
+    const stockMap = { ...(parsed as Record<string, unknown>) };
     const prefix = `${productId}::`;
     const changes: StockChange[] = [];
 
-    for (const [key, previousStock] of Object.entries(stockMap)) {
-      if (key === String(productId)) {
-        changes.push({
-          productId,
-          previousStock,
-          stock: 0,
-        });
-        delete stockMap[key];
-      } else if (key.startsWith(prefix)) {
-        const size = key.slice(prefix.length);
-
-        changes.push({
-          productId,
-          size,
-          previousStock,
-          stock: 0,
-        });
-
-        delete stockMap[key];
+    for (const [key, value] of Object.entries(stockMap)) {
+      if (key !== String(productId) && !key.startsWith(prefix)) {
+        continue;
       }
+
+      const previousStock = normalizeStock(value);
+
+      if (key.startsWith(prefix)) {
+        changes.push({
+          productId,
+          size: key.slice(prefix.length),
+          previousStock,
+          stock: 0,
+        });
+      } else {
+        changes.push({
+          productId,
+          previousStock,
+          stock: 0,
+        });
+      }
+
+      delete stockMap[key];
     }
 
-    if (!persistStockMap(stockMap)) return false;
+    window.localStorage.setItem(STOCK_STORAGE_KEY, JSON.stringify(stockMap));
 
     notifyStockUpdated(changes);
     return true;
   } catch (error) {
     console.error("Không thể xóa dữ liệu tồn kho của sản phẩm:", error);
+    return false;
+  }
+}
+
+/**
+ * Thay thế toàn bộ dữ liệu tồn kho của một sản phẩm.
+ *
+ * - Sản phẩm có size: chỉ lưu tồn kho theo từng size hiện tại.
+ * - Sản phẩm không có size: chỉ lưu tồn kho chung.
+ * - Xóa các khóa cũ khi size bị đổi tên hoặc xóa.
+ * - Giữ nguyên tồn kho của các sản phẩm khác.
+ */
+export function replaceStockForProduct(
+  productId: number,
+  updates: StockUpdate[],
+): boolean {
+  if (!isBrowser() || !Number.isInteger(productId) || productId <= 0) {
+    return false;
+  }
+
+  const product = getStockProduct(productId);
+
+  if (!product) {
+    return false;
+  }
+
+  const seen = new Set<string>();
+
+  // Kiểm tra dữ liệu trước khi thay đổi.
+  for (const update of updates) {
+    if (
+      update.productId !== productId ||
+      !Number.isInteger(update.quantity) ||
+      update.quantity < 0
+    ) {
+      return false;
+    }
+
+    const key = getStockKey(update.productId, update.size);
+
+    if (!key || seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+  }
+
+  // Bắt buộc cung cấp đủ tồn kho cho cấu trúc sản phẩm hiện tại.
+  if (product.sizes?.length) {
+    if (
+      updates.length !== product.sizes.length ||
+      product.sizes.some(
+        (size) => !updates.some((update) => update.size === size.label),
+      )
+    ) {
+      return false;
+    }
+  } else if (updates.length !== 1 || updates[0].size !== undefined) {
+    return false;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(STOCK_STORAGE_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : {};
+
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+      return false;
+    }
+
+    const stockMap: StockMap = {};
+
+    for (const [key, value] of Object.entries(parsed)) {
+      const stock = Number(value);
+
+      if (Number.isFinite(stock) && stock >= 0) {
+        stockMap[key] = Math.floor(stock);
+      }
+    }
+    const prefix = `${productId}::`;
+
+    // Lấy tồn kho cũ để phát thông báo chính xác.
+    const previousStock = new Map<string, number>();
+
+    for (const [key, value] of Object.entries(stockMap)) {
+      if (key === String(productId) || key.startsWith(prefix)) {
+        previousStock.set(key, normalizeStock(value));
+        delete stockMap[key];
+      }
+    }
+
+    const changes: StockChange[] = [];
+
+    for (const update of updates) {
+      const key = update.size
+        ? `${productId}::${update.size}`
+        : String(productId);
+
+      const oldStock = previousStock.get(key);
+
+      stockMap[key] = update.quantity;
+
+      changes.push({
+        productId,
+        size: update.size,
+        previousStock:
+          oldStock ??
+          (update.size
+            ? normalizeStock(
+                product.sizes?.find((size) => size.label === update.size)
+                  ?.stock ?? 0,
+              )
+            : normalizeStock(product.stock ?? 0)),
+        stock: update.quantity,
+      });
+    }
+
+    if (!window.localStorage.setItem || !persistStockMap(stockMap)) {
+      return false;
+    }
+
+    // Thông báo các size cũ đã bị xóa hoặc đổi tên.
+    for (const [key, oldStock] of previousStock) {
+      const stillExists = updates.some((update) => {
+        const updateKey = update.size
+          ? `${productId}::${update.size}`
+          : String(productId);
+
+        return updateKey === key;
+      });
+
+      if (!stillExists) {
+        changes.push({
+          productId,
+          size: key.startsWith(prefix) ? key.slice(prefix.length) : undefined,
+          previousStock: oldStock,
+          stock: 0,
+        });
+      }
+    }
+
+    notifyStockUpdated(changes);
+    return true;
+  } catch (error) {
+    console.error("Không thể đồng bộ tồn kho sản phẩm:", error);
     return false;
   }
 }

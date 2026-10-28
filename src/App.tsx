@@ -17,6 +17,11 @@ import Dashboard from "./pages/Admin/Dashboard";
 import UserLogin from "./pages/Auth/Login";
 import UserRegister from "./pages/Auth/Register";
 import AdminProducts from "./pages/Admin/AdminProducts";
+import AdminOrders from "./pages/Admin/AdminOrders";
+import AdminCustomers from "./pages/Admin/AdminCustomers";
+import AdminEmployees from "./pages/Admin/AdminEmployees";
+import AdminArticles from "./pages/Admin/AdminArticles";
+import AdminProfile from "./pages/Admin/AdminProfile";
 
 function App() {
   return (
@@ -35,7 +40,11 @@ function App() {
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Dashboard />} />
             <Route path="products" element={<AdminProducts />} />
-            {/* Các route Admin sẽ bổ sung tại đây */}
+            <Route path="orders" element={<AdminOrders />} />
+            <Route path="customers" element={<AdminCustomers />} />
+            <Route path="employees" element={<AdminEmployees />} />
+            <Route path="articles" element={<AdminArticles />} />
+            <Route path="profile" element={<AdminProfile />} />
           </Route>
         </Route>
 
