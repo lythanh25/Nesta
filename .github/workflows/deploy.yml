@@ -38,6 +38,10 @@ jobs:
       - name: Build
         run: npm run build
 
+      # Hỗ trợ truy cập trực tiếp các route của React Router
+      - name: Configure SPA fallback
+        run: cp dist/index.html dist/404.html
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
