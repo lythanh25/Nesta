@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useFeedback } from "../../components/feedback/useFeedback";
 import {
   formatCurrency,
   formatDate,
@@ -18,11 +19,11 @@ const statuses: OrderStatus[] = [
 ];
 
 function AdminOrders() {
+  const { toast } = useFeedback();
   const [orders, setOrders] = useState<AdminOrder[]>(() => readAllOrders());
   const [keyword, setKeyword] = useState("");
   const [statusFilter, setStatusFilter] = useState("Tất cả");
   const [selectedOrder, setSelectedOrder] = useState<AdminOrder | null>(null);
-  const [message, setMessage] = useState("");
   const [updatingId, setUpdatingId] = useState("");
 
   function loadOrders() {
@@ -69,13 +70,13 @@ function AdminOrders() {
 
   function handleStatusChange(order: AdminOrder, status: OrderStatus) {
     setUpdatingId(order.id);
-    setMessage("");
 
     const success = updateOrderStatus(order.id, status);
 
     if (!success) {
-      setMessage(
+      toast(
         "Không thể cập nhật trạng thái. Hãy kiểm tra dữ liệu đơn hàng trong trình duyệt.",
+        "error",
       );
       setUpdatingId("");
       return;
@@ -85,7 +86,7 @@ function AdminOrders() {
     setSelectedOrder((current) =>
       current?.id === order.id ? { ...current, status } : current,
     );
-    setMessage(`Đã cập nhật đơn ${order.id}.`);
+    toast(`Đã cập nhật đơn ${order.id}.`, "success");
     setUpdatingId("");
   }
 
@@ -111,15 +112,6 @@ function AdminOrders() {
           Làm mới dữ liệu
         </button>
       </div>
-
-      {message && (
-        <div
-          role="status"
-          className="rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-700"
-        >
-          {message}
-        </div>
-      )}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[

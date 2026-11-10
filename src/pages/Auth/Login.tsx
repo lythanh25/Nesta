@@ -2,8 +2,10 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { loginCustomer } from "../../utils/customerAuth";
+import { useFeedback } from "../../components/feedback/useFeedback";
 
 function Login() {
+  const { toast } = useFeedback();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
@@ -21,6 +23,7 @@ function Login() {
       return;
     }
 
+    toast("Đăng nhập thành công. Chào mừng bạn quay lại NESTA!", "success");
     navigate("/profile", { replace: true });
   }
 

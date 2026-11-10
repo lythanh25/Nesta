@@ -9,6 +9,7 @@ import {
 } from "../../utils/customerAuth";
 
 import { products } from "../../data/products";
+import { useFeedback } from "../../components/feedback/useFeedback";
 import type { Product } from "../../data/products";
 import { getFavoriteIds, toggleProductFavorite } from "../../utils/favorites";
 import { getStock, setMultipleStock } from "../../utils/stock";
@@ -220,6 +221,7 @@ function canCancelOrder(status: string): boolean {
 }
 
 function Profile() {
+  const { toast, confirm } = useFeedback();
   const navigate = useNavigate();
   const session = getCustomerSession();
 
@@ -265,7 +267,6 @@ function Profile() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -331,7 +332,6 @@ function Profile() {
   const labelClass = "mb-1.5 block text-[11px] font-medium text-[#3b2f25]";
 
   function clearMessages() {
-    setMessage("");
     setError("");
   }
 
@@ -387,7 +387,7 @@ function Profile() {
         JSON.stringify(profile),
       );
 
-      setMessage("Thông tin cá nhân đã được cập nhật thành công.");
+      toast("Thông tin cá nhân đã được cập nhật thành công.", "success");
     } catch {
       setError("Không thể lưu thông tin cá nhân. Vui lòng thử lại.");
     }
@@ -408,7 +408,7 @@ function Profile() {
         JSON.stringify(address),
       );
 
-      setMessage("Địa chỉ giao hàng đã được lưu thành công.");
+      toast("Địa chỉ giao hàng đã được lưu thành công.", "success");
     } catch {
       setError("Không thể lưu địa chỉ. Vui lòng thử lại.");
     }
@@ -444,18 +444,22 @@ function Profile() {
     setNewPassword("");
     setConfirmPassword("");
 
-    setMessage("Đổi mật khẩu thành công.");
+    toast("Đổi mật khẩu thành công.", "success");
   }
 
   function removeFavorite(productId: number) {
     toggleProductFavorite(productId);
     setFavoriteIds(getFavoriteIds());
-    setMessage("Đã xóa sản phẩm khỏi danh sách yêu thích.");
+    toast("Đã xóa sản phẩm khỏi danh sách yêu thích.", "success");
     setError("");
   }
 
-  function handleLogout() {
-    const confirmed = window.confirm("Bạn muốn đăng xuất khỏi tài khoản?");
+  async function handleLogout() {
+    const confirmed = await confirm({
+      title: "Đăng xuất tài khoản?",
+      message: "Bạn muốn đăng xuất khỏi tài khoản?",
+      confirmText: "Đăng xuất",
+    });
 
     if (!confirmed) {
       return;
@@ -465,7 +469,7 @@ function Profile() {
     navigate("/login", { replace: true });
   }
 
-  function handleCancelOrder(orderId: string) {
+  async function handleCancelOrder(orderId: string) {
     clearMessages();
 
     if (!session) {
@@ -473,9 +477,13 @@ function Profile() {
       return;
     }
 
-    const confirmed = window.confirm(
-      "Bạn có chắc chắn muốn hủy đơn hàng này không? Số lượng sản phẩm sẽ được hoàn lại kho.",
-    );
+    const confirmed = await confirm({
+      title: "Hủy đơn hàng?",
+      message:
+        "Bạn có chắc chắn muốn hủy đơn hàng này không? Số lượng sản phẩm sẽ được hoàn lại kho.",
+      confirmText: "Hủy đơn hàng",
+      danger: true,
+    });
 
     if (!confirmed) return;
 
@@ -486,12 +494,12 @@ function Profile() {
     const targetOrder = latestOrders.find((order) => order.id === orderId);
 
     if (!targetOrder) {
-      setError("Không tìm thấy đơn hàng cần hủy.");
+      toast("Không tìm thấy đơn hàng cần hủy.", "error");
       return;
     }
 
     if (!canCancelOrder(targetOrder.status || "")) {
-      setError("Đơn hàng này không còn được phép hủy.");
+      toast("Đơn hàng này không còn được phép hủy.", "warning");
       setOrders(latestOrders);
       return;
     }
@@ -510,8 +518,9 @@ function Profile() {
         (!product.sizes?.length && item.size) ||
         (item.size && !product.sizes?.some((size) => size.label === item.size))
       ) {
-        setError(
+        toast(
           "Không thể hoàn kho vì thông tin sản phẩm trong đơn hàng không hợp lệ.",
+          "error",
         );
         return;
       }
@@ -552,7 +561,7 @@ function Profile() {
 
     // Hoàn kho trước, chỉ cập nhật đơn nếu thao tác thành công.
     if (nextStock.length > 0 && !setMultipleStock(nextStock)) {
-      setError("Không thể hoàn lại tồn kho. Vui lòng thử lại.");
+      toast("Không thể hoàn lại tồn kho. Vui lòng thử lại.", "error");
       return;
     }
 
@@ -564,8 +573,9 @@ function Profile() {
       localStorage.setItem(userOrdersKey, JSON.stringify(updatedOrders));
 
       setOrders(updatedOrders);
-      setMessage(
+      toast(
         "Đã hủy đơn hàng thành công. Số lượng sản phẩm đã được hoàn lại kho.",
+        "success",
       );
 
       window.dispatchEvent(new Event("ordersUpdated"));
@@ -573,10 +583,11 @@ function Profile() {
       // Nếu không lưu được trạng thái đơn, khôi phục tồn kho cũ.
       const restored = setMultipleStock(previousStock);
 
-      setError(
+      toast(
         restored
           ? "Không thể lưu trạng thái đơn hàng. Tồn kho đã được khôi phục, vui lòng thử lại."
           : "Không thể lưu trạng thái đơn hàng và khôi phục tồn kho tự động. Vui lòng kiểm tra lại dữ liệu tồn kho.",
+        "error",
       );
     }
   }
@@ -655,15 +666,6 @@ function Profile() {
           {/* KHU VỰC NỘI DUNG */}
 
           <div className="min-w-0 space-y-7">
-            {message && (
-              <div
-                role="status"
-                className="border border-[#d2dfce] bg-[#f1f7ee] px-4 py-3 text-xs leading-5 text-[#45613f]"
-              >
-                {message}
-              </div>
-            )}
-
             {error && (
               <div
                 role="alert"

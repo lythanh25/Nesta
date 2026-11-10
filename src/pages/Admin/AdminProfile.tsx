@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useFeedback } from "../../components/feedback/useFeedback";
 import {
   ADMIN_STORAGE_KEYS,
   readStorage,
@@ -14,6 +15,7 @@ const defaultProfile: AdminProfileData = {
 };
 
 function AdminProfile() {
+  const { toast, confirm } = useFeedback();
   const [form, setForm] = useState<AdminProfileData>(() => {
     const saved = readStorage<Partial<AdminProfileData>>(
       ADMIN_STORAGE_KEYS.adminProfile,
@@ -23,17 +25,11 @@ function AdminProfile() {
     return { ...defaultProfile, ...saved };
   });
 
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState<"success" | "error">(
-    "success",
-  );
-
   function saveProfile(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!form.fullName.trim() || !form.email.trim()) {
-      setMessageType("error");
-      setMessage("Họ tên và email không được để trống.");
+      toast("Họ tên và email không được để trống.", "warning");
       return;
     }
 
@@ -45,16 +41,21 @@ function AdminProfile() {
       position: form.position.trim(),
     });
 
-    setMessageType(success ? "success" : "error");
-    setMessage(
+    toast(
       success
         ? "Đã lưu hồ sơ quản trị viên."
         : "Không thể lưu hồ sơ. Vui lòng thử lại.",
+      success ? "success" : "error",
     );
   }
 
-  function resetProfile() {
-    if (!window.confirm("Khôi phục thông tin hồ sơ mặc định?")) return;
+  async function resetProfile() {
+    const confirmed = await confirm({
+      title: "Khôi phục hồ sơ?",
+      message: "Khôi phục thông tin hồ sơ mặc định?",
+      confirmText: "Khôi phục",
+    });
+    if (!confirmed) return;
 
     const success = writeStorage(
       ADMIN_STORAGE_KEYS.adminProfile,
@@ -63,11 +64,9 @@ function AdminProfile() {
 
     if (success) {
       setForm(defaultProfile);
-      setMessageType("success");
-      setMessage("Đã khôi phục hồ sơ mặc định.");
+      toast("Đã khôi phục hồ sơ mặc định.", "success");
     } else {
-      setMessageType("error");
-      setMessage("Không thể khôi phục hồ sơ.");
+      toast("Không thể khôi phục hồ sơ.", "error");
     }
   }
 
@@ -98,19 +97,6 @@ function AdminProfile() {
         </div>
 
         <form onSubmit={saveProfile} className="space-y-5 p-6">
-          {message && (
-            <div
-              role="status"
-              className={`rounded-xl p-3 text-sm ${
-                messageType === "success"
-                  ? "bg-green-50 text-green-800"
-                  : "bg-red-50 text-red-700"
-              }`}
-            >
-              {message}
-            </div>
-          )}
-
           <div className="grid gap-5 sm:grid-cols-2">
             <label className="block text-sm font-medium">
               Họ và tên *

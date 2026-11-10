@@ -42,6 +42,25 @@ function normalizeProducts(value: unknown): Product[] | null {
   return value as Product[];
 }
 
+/**
+ * Bổ sung đường dẫn model 3D từ danh sách sản phẩm gốc
+ * nếu dữ liệu LocalStorage chưa có model3D.
+ */
+function mergeStaticModels(savedProducts: Product[]): Product[] {
+  const staticProductsMap = new Map(
+    products.map((product) => [product.id, product]),
+  );
+
+  return savedProducts.map((savedProduct) => {
+    const staticProduct = staticProductsMap.get(savedProduct.id);
+
+    return {
+      ...savedProduct,
+      model3D: savedProduct.model3D ?? staticProduct?.model3D,
+    };
+  });
+}
+
 function invalidateCache(): void {
   cachedRaw = undefined;
   cachedProducts = null;
@@ -68,7 +87,8 @@ export function getProducts(): Product[] {
     const normalized = normalizeProducts(parsed);
 
     cachedRaw = raw;
-    cachedProducts = normalized ?? products;
+
+    cachedProducts = normalized ? mergeStaticModels(normalized) : products;
 
     return cachedProducts;
   } catch (error) {

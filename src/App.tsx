@@ -1,4 +1,5 @@
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { FeedbackProvider } from "./components/feedback/FeedbackProvider";
 
 import ScrollToTop from "./components/ScrollToTop";
 import MainLayout from "./components/layout/MainLayout";
@@ -25,41 +26,43 @@ import AdminProfile from "./pages/Admin/AdminProfile";
 
 function App() {
   return (
-    <BrowserRouter basename="/Nesta">
-      <ScrollToTop />
-      <Routes>
-        {/* Tài khoản khách hàng */}
-        <Route path="/login" element={<UserLogin />} />
-        <Route path="/register" element={<UserRegister />} />
+    <FeedbackProvider>
+      <BrowserRouter basename="/Nesta">
+        <ScrollToTop />
+        <Routes>
+          {/* Tài khoản khách hàng */}
+          <Route path="/login" element={<UserLogin />} />
+          <Route path="/register" element={<UserRegister />} />
 
-        {/* Tài khoản Admin */}
-        <Route path="/admin/login" element={<AdminLogin />} />
+          {/* Tài khoản Admin */}
+          <Route path="/admin/login" element={<AdminLogin />} />
 
-        {/* Khu vực quản trị được bảo vệ */}
-        <Route element={<RequireAdmin />}>
-          <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="products" element={<AdminProducts />} />
-            <Route path="orders" element={<AdminOrders />} />
-            <Route path="customers" element={<AdminCustomers />} />
-            <Route path="employees" element={<AdminEmployees />} />
-            <Route path="articles" element={<AdminArticles />} />
-            <Route path="profile" element={<AdminProfile />} />
+          {/* Khu vực quản trị được bảo vệ */}
+          <Route element={<RequireAdmin />}>
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="products" element={<AdminProducts />} />
+              <Route path="orders" element={<AdminOrders />} />
+              <Route path="customers" element={<AdminCustomers />} />
+              <Route path="employees" element={<AdminEmployees />} />
+              <Route path="articles" element={<AdminArticles />} />
+              <Route path="profile" element={<AdminProfile />} />
+            </Route>
           </Route>
-        </Route>
 
-        {/* Website khách hàng — giữ nguyên */}
-        <Route element={<MainLayout />}>
-          <Route path="/" element={<Home />} />
-          <Route path="/products" element={<Products />} />
-          <Route path="/products/:id" element={<ProductDetail />} />
-          <Route path="/cart" element={<Cart />} />
-          <Route path="/checkout" element={<Checkout />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/about" element={<About />} />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+          {/* Website khách hàng — giữ nguyên */}
+          <Route element={<MainLayout />}>
+            <Route path="/" element={<Home />} />
+            <Route path="/products" element={<Products />} />
+            <Route path="/products/:id" element={<ProductDetail />} />
+            <Route path="/cart" element={<Cart />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/about" element={<About />} />
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </FeedbackProvider>
   );
 }
 

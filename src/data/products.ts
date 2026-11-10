@@ -45,6 +45,7 @@ const modelFiles = import.meta.glob("../assets/models/*.glb", {
 function getModel(filename: string): string | undefined {
   return modelFiles[`../assets/models/${filename}`];
 }
+console.log("DANH SÁCH MODEL VITE NHẬN DIỆN:", Object.keys(modelFiles));
 
 // =====================================================
 // 9 DANH MỤC CHÍNH - NESTA

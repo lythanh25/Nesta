@@ -2,8 +2,10 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { registerCustomer } from "../../utils/customerAuth";
+import { useFeedback } from "../../components/feedback/useFeedback";
 
 function Register() {
+  const { toast } = useFeedback();
   const navigate = useNavigate();
 
   const [fullName, setFullName] = useState("");
@@ -39,6 +41,7 @@ function Register() {
       return;
     }
 
+    toast("Tạo tài khoản thành công. Chào mừng bạn đến với NESTA!", "success");
     navigate("/profile", { replace: true });
   }
 

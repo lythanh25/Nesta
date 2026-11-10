@@ -13,6 +13,7 @@ import {
   type StockUpdate,
 } from "../../utils/stock";
 import { productCategories, type Product } from "../../data/products";
+import { useFeedback } from "../../components/feedback/useFeedback";
 import AdminProductForm from "./AdminProductForm";
 
 const formatPrice = (price: number) =>
@@ -36,6 +37,7 @@ function getProductStock(
 }
 
 export default function AdminProducts() {
+  const { toast, confirm } = useFeedback();
   const [products, setProducts] = useState<Product[]>(() => getProducts());
   const [stockMap, setStockMap] = useState(() => getAllStock());
   const [keyword, setKeyword] = useState("");
@@ -104,11 +106,11 @@ export default function AdminProducts() {
       }));
 
       if (!setMultipleStock(updates)) {
-        window.alert("Không thể cập nhật tồn kho. Vui lòng thử lại.");
+        toast("Không thể cập nhật tồn kho. Vui lòng thử lại.", "error");
         return;
       }
     } else if (!setMultipleStock([{ productId: product.id, quantity: 0 }])) {
-      window.alert("Không thể cập nhật tồn kho. Vui lòng thử lại.");
+      toast("Không thể cập nhật tồn kho. Vui lòng thử lại.", "error");
       return;
     }
 
@@ -130,28 +132,32 @@ export default function AdminProducts() {
       // Tồn kho đã được đặt về 0; thông báo nếu không lưu được thông tin sản phẩm.
       refreshProducts();
       refreshStock();
-      window.alert(
+      toast(
         "Tồn kho đã được đặt về 0, nhưng không thể lưu trạng thái sản phẩm. Vui lòng kiểm tra lại.",
+        "error",
       );
       return;
     }
 
     refreshProducts();
     refreshStock();
-    window.alert(`Đã đánh dấu "${product.name}" hết hàng.`);
+    toast(`Đã đánh dấu "${product.name}" hết hàng.`, "success");
   };
 
-  const handleDelete = (product: Product) => {
-    const confirmed = window.confirm(
-      `Bạn có chắc muốn XÓA HẲN "${product.name}" khỏi danh mục sản phẩm không? Thao tác này không thể hoàn tác bằng nút Sửa.`,
-    );
+  const handleDelete = async (product: Product) => {
+    const confirmed = await confirm({
+      title: "Xóa sản phẩm?",
+      message: `Bạn có chắc muốn XÓA HẲN "${product.name}" khỏi danh mục sản phẩm không? Thao tác này không thể hoàn tác bằng nút Sửa.`,
+      confirmText: "Xóa sản phẩm",
+      danger: true,
+    });
 
     if (!confirmed) return;
 
     if (!deleteProduct(product.id)) {
       refreshProducts();
       refreshStock();
-      window.alert("Không thể xóa sản phẩm. Vui lòng thử lại.");
+      toast("Không thể xóa sản phẩm. Vui lòng thử lại.", "error");
       return;
     }
 
@@ -161,13 +167,14 @@ export default function AdminProducts() {
     refreshStock();
 
     if (!stockRemoved) {
-      window.alert(
+      toast(
         "Sản phẩm đã được xóa nhưng dữ liệu tồn kho cũ chưa được dọn sạch.",
+        "warning",
       );
       return;
     }
 
-    window.alert("Đã xóa hẳn sản phẩm khỏi danh mục ứng dụng.");
+    toast("Đã xóa hẳn sản phẩm khỏi danh mục ứng dụng.", "success");
   };
 
   const totalProducts = products.length;
@@ -410,7 +417,14 @@ export default function AdminProducts() {
         <AdminProductForm
           product={editingProduct}
           onCancel={closeForm}
-          onSaved={closeForm}
+          onSaved={() => {
+            const wasEditing = Boolean(editingProduct);
+            closeForm();
+            toast(
+              wasEditing ? "Đã cập nhật sản phẩm." : "Đã thêm sản phẩm mới.",
+              "success",
+            );
+          }}
         />
       )}
     </div>

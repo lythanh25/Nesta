@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import banner from "../../assets/banner.jpg";
+import { useFeedback } from "../../components/feedback/useFeedback";
 import deleteIcon from "../../assets/Delete.svg";
 import { getSizePrice, products, type Product } from "../../data/products";
 import { getCartItems, saveCartItems, type CartItem } from "../../utils/cart";
@@ -51,6 +52,7 @@ function CartHero() {
 // =========================================================
 
 function Cart() {
+  const { toast } = useFeedback();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
   const [stockVersion, setStockVersion] = useState(0);
@@ -119,7 +121,10 @@ function Cart() {
     const validation = validateStock(productId, nextQuantity, size);
 
     if (!validation.valid) {
-      alert(validation.message || "Số lượng vượt quá tồn kho hiện có.");
+      toast(
+        validation.message || "Số lượng vượt quá tồn kho hiện có.",
+        "warning",
+      );
       return;
     }
 
@@ -168,6 +173,7 @@ function Cart() {
     );
 
     saveCart(updatedItems);
+    toast("Đã xóa sản phẩm khỏi giỏ hàng.", "success");
   }
 
   // =========================================================

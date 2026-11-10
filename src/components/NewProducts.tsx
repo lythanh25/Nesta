@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { newProducts } from "../data/products";
+import { useFeedback } from "../components/feedback/useFeedback";
 import ProductCard from "./product/ProductCard";
 import shoppingCart from "../assets/shopping-cart.svg";
 
@@ -37,6 +38,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 function NewProducts() {
+  const { toast } = useFeedback();
   const navigate = useNavigate();
 
   const mainProduct = newProducts[0];
@@ -116,13 +118,19 @@ function NewProducts() {
 
   function handleToggleFavorite() {
     if (!getCustomerSession()) {
-      alert("Vui lòng đăng nhập để sử dụng danh sách yêu thích.");
+      toast("Vui lòng đăng nhập để sử dụng danh sách yêu thích.", "warning");
       navigate("/login");
       return;
     }
 
-    toggleProductFavorite(mainProduct.id);
-    setIsFavorite(isProductFavorite(mainProduct.id));
+    const nextFavorite = toggleProductFavorite(mainProduct.id);
+    setIsFavorite(nextFavorite);
+    toast(
+      nextFavorite
+        ? "Đã thêm vào danh sách yêu thích."
+        : "Đã xóa khỏi danh sách yêu thích.",
+      "success",
+    );
   }
 
   // =====================================================
@@ -132,7 +140,7 @@ function NewProducts() {
 
   function addMainProductToCart() {
     if (!getCustomerSession()) {
-      alert("Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng.");
+      toast("Vui lòng đăng nhập để thêm sản phẩm vào giỏ hàng.", "warning");
       navigate("/login");
       return;
     }
@@ -140,7 +148,7 @@ function NewProducts() {
     // Sản phẩm có size: chuyển đến trang chi tiết để chọn size.
     if (hasSizes) {
       if (!stockAvailable) {
-        alert("Sản phẩm hiện đã hết hàng.");
+        toast("Sản phẩm hiện đã hết hàng.", "warning");
         return;
       }
 
@@ -152,18 +160,18 @@ function NewProducts() {
     const validation = validateStock(mainProduct.id, 1);
 
     if (!validation.valid) {
-      alert(validation.message ?? "Sản phẩm hiện không đủ hàng.");
+      toast(validation.message ?? "Sản phẩm hiện không đủ hàng.", "warning");
       return;
     }
 
     const success = addCartItem(mainProduct.id, undefined, 1);
 
     if (!success) {
-      alert("Không thể thêm sản phẩm vào giỏ hàng. Vui lòng thử lại.");
+      toast("Không thể thêm sản phẩm vào giỏ hàng. Vui lòng thử lại.", "error");
       return;
     }
 
-    alert("Đã thêm sản phẩm vào giỏ hàng!");
+    toast("Đã thêm sản phẩm vào giỏ hàng!", "success");
   }
 
   // =====================================================
