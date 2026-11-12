@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import ScrollReveal from "./ScrollReveal";
 
 import { newProducts } from "../data/products";
 import { useFeedback } from "../components/feedback/useFeedback";
@@ -181,55 +182,58 @@ function NewProducts() {
   return (
     <section className="bg-[#f7f1ed] px-5 pb-8 md:px-8 md:pb-10">
       <div className="mx-auto max-w-7xl">
-        <SectionTitle>SẢN PHẨM MỚI</SectionTitle>
+        <ScrollReveal>
+          <SectionTitle>SẢN PHẨM MỚI</SectionTitle>
+        </ScrollReveal>
 
-        <div
-          className="
+        <ScrollReveal delay={100}>
+          <div
+            className="
             grid grid-cols-2 gap-2
             sm:grid-cols-4 sm:grid-rows-2 sm:gap-2
           "
-        >
-          {/* SẢN PHẨM CHÍNH */}
+          >
+            {/* SẢN PHẨM CHÍNH */}
 
-          <article
-            className="
+            <article
+              className="
               group col-span-2 row-span-2
               flex aspect-square min-w-0 flex-col
               overflow-hidden rounded-[6px]
               border border-[#aaa39d] bg-white
             "
-          >
-            {/* ẢNH SẢN PHẨM */}
+            >
+              {/* ẢNH SẢN PHẨM */}
 
-            <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
-              <Link
-                to={`/products/${mainProduct.id}`}
-                className="block h-full w-full"
-              >
-                <img
-                  src={mainProduct.images[0]}
-                  alt={mainProduct.name}
-                  loading="lazy"
-                  className="
+              <div className="relative min-h-0 flex-1 overflow-hidden bg-white">
+                <Link
+                  to={`/products/${mainProduct.id}`}
+                  className="block h-full w-full"
+                >
+                  <img
+                    src={mainProduct.images[0]}
+                    alt={mainProduct.name}
+                    loading="lazy"
+                    className="
                     block h-full w-full object-cover
                     transition-transform duration-300
                     group-hover:scale-[1.03]
                   "
-                />
-              </Link>
+                  />
+                </Link>
 
-              {/* YÊU THÍCH */}
+                {/* YÊU THÍCH */}
 
-              <button
-                type="button"
-                aria-label={
-                  isFavorite
-                    ? "Xóa khỏi danh sách yêu thích"
-                    : "Thêm vào danh sách yêu thích"
-                }
-                aria-pressed={isFavorite}
-                onClick={handleToggleFavorite}
-                className="
+                <button
+                  type="button"
+                  aria-label={
+                    isFavorite
+                      ? "Xóa khỏi danh sách yêu thích"
+                      : "Thêm vào danh sách yêu thích"
+                  }
+                  aria-pressed={isFavorite}
+                  onClick={handleToggleFavorite}
+                  className="
                   absolute right-2 top-2 z-10
                   flex h-7 w-7 cursor-pointer
                   items-center justify-center
@@ -238,76 +242,76 @@ function NewProducts() {
                   transition-colors hover:text-red-500
                   sm:right-2.5 sm:top-2.5 sm:h-8 sm:w-8
                 "
-              >
-                <span className={isFavorite ? "text-red-500" : ""}>
-                  {isFavorite ? "♥" : "♡"}
-                </span>
-              </button>
+                >
+                  <span className={isFavorite ? "text-red-500" : ""}>
+                    {isFavorite ? "♥" : "♡"}
+                  </span>
+                </button>
 
-              {/* HẾT HÀNG */}
+                {/* HẾT HÀNG */}
 
-              {!stockAvailable && (
-                <span
-                  className="
+                {!stockAvailable && (
+                  <span
+                    className="
                     absolute bottom-2 left-2
                     rounded-[3px] bg-black/70
                     px-2 py-1 text-[9px]
                     font-medium text-white
                   "
-                >
-                  Hết hàng
-                </span>
-              )}
-            </div>
+                  >
+                    Hết hàng
+                  </span>
+                )}
+              </div>
 
-            {/* THÔNG TIN SẢN PHẨM */}
+              {/* THÔNG TIN SẢN PHẨM */}
 
-            <div
-              className="
+              <div
+                className="
                 flex h-[72px] shrink-0 flex-col justify-between
                 px-2.5 py-2
                 sm:h-[76px] sm:px-3 sm:py-2.5
               "
-            >
-              <Link to={`/products/${mainProduct.id}`} className="min-w-0">
-                <h3
-                  className="
+              >
+                <Link to={`/products/${mainProduct.id}`} className="min-w-0">
+                  <h3
+                    className="
                     line-clamp-2 min-h-[30px]
                     text-[11px] font-medium leading-[1.35]
                     text-[#2d261f]
                     sm:text-[12px]
                   "
-                >
-                  {mainProduct.name}
-                </h3>
-              </Link>
+                  >
+                    {mainProduct.name}
+                  </h3>
+                </Link>
 
-              {/* GIÁ VÀ NÚT GIỎ HÀNG */}
+                {/* GIÁ VÀ NÚT GIỎ HÀNG */}
 
-              <div className="flex min-w-0 items-center justify-between gap-1.5">
-                <p
-                  className="
+                <div className="flex min-w-0 items-center justify-between gap-1.5">
+                  <p
+                    className="
                     min-w-0 truncate
                     text-[9px] font-medium leading-tight
                     text-[#5e554e]
                     sm:text-[10px]
                   "
-                >
-                  {formattedPrice} VNĐ
-                </p>
+                  >
+                    {formattedPrice} VNĐ
+                  </p>
 
-                <button
-                  type="button"
-                  onClick={addMainProductToCart}
-                  disabled={!stockAvailable}
-                  aria-label={
-                    !stockAvailable
-                      ? `${mainProduct.name} đã hết hàng`
-                      : hasSizes
-                        ? `Chọn kích thước ${mainProduct.name}`
-                        : `Thêm ${mainProduct.name} vào giỏ hàng`
-                  }
-                  className="
+                  <button
+                    type="button"
+                    onClick={addMainProductToCart}
+                    disabled={!stockAvailable}
+                    aria-label={
+                      !stockAvailable
+                        ? `${mainProduct.name} đã hết hàng`
+                        : hasSizes
+                          ? `Chọn kích thước ${mainProduct.name}`
+                          : `Thêm ${mainProduct.name} vào giỏ hàng`
+                    }
+                    className="
                     flex h-[24px] shrink-0 cursor-pointer
                     items-center justify-center gap-1
                     rounded-[3px] bg-[#5a493d]
@@ -317,25 +321,26 @@ function NewProducts() {
                     disabled:cursor-not-allowed disabled:opacity-50
                     sm:h-[25px] sm:px-2.5 sm:text-[9px]
                   "
-                >
-                  <span>{hasSizes ? "Chọn size" : "Giỏ hàng"}</span>
+                  >
+                    <span>{hasSizes ? "Chọn size" : "Giỏ hàng"}</span>
 
-                  <img
-                    src={shoppingCart}
-                    alt=""
-                    className="h-[11px] w-[11px] brightness-0 invert"
-                  />
-                </button>
+                    <img
+                      src={shoppingCart}
+                      alt=""
+                      className="h-[11px] w-[11px] brightness-0 invert"
+                    />
+                  </button>
+                </div>
               </div>
-            </div>
-          </article>
+            </article>
 
-          {/* BỐN SẢN PHẨM NHỎ */}
+            {/* BỐN SẢN PHẨM NHỎ */}
 
-          {otherProducts.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
+            {otherProducts.map((product) => (
+              <ProductCard key={product.id} product={product} />
+            ))}
+          </div>
+        </ScrollReveal>
       </div>
     </section>
   );

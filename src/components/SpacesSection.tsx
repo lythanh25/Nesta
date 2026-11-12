@@ -1,23 +1,17 @@
 import { Link } from "react-router-dom";
+
 import Living from "../assets/images/spaces/living-room.jpg";
 import Bedroom from "../assets/images/spaces/bedroom.jpg";
 import Dining from "../assets/images/spaces/dining-room.jpg";
 import Office from "../assets/images/spaces/office.jpg";
+import ScrollReveal from "./ScrollReveal";
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
     <div className="mb-7 flex items-center justify-center gap-3">
       <span className="h-px w-12 bg-[#aaa19a] sm:w-30" />
 
-      <h2
-        className="
-          text-[18px]
-          font-semibold
-          tracking-wide
-          text-[#2d261f]
-          sm:text-[32px]
-        "
-      >
+      <h2 className="text-[18px] font-semibold tracking-wide text-[#2d261f] sm:text-[32px]">
         {children}
       </h2>
 
@@ -27,47 +21,34 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 const spaces = [
-  {
-    name: "Phòng khách",
-    image: Living,
-    slug: "phong-khach",
-  },
-  {
-    name: "Phòng ngủ",
-    image: Bedroom,
-    slug: "phong-ngu",
-  },
-  {
-    name: "Phòng ăn",
-    image: Dining,
-    slug: "phong-an",
-  },
-  {
-    name: "Phòng làm việc",
-    image: Office,
-    slug: "phong-lam-viec",
-  },
+  { name: "Phòng khách", image: Living, slug: "phong-khach" },
+  { name: "Phòng ngủ", image: Bedroom, slug: "phong-ngu" },
+  { name: "Phòng ăn", image: Dining, slug: "phong-an" },
+  { name: "Phòng làm việc", image: Office, slug: "phong-lam-viec" },
 ];
 
 function SpacesSection() {
   return (
     <section className="bg-[#f7f1ed] px-5 py-8 md:py-12">
       <div className="mx-auto max-w-7xl">
-        <SectionTitle>THEO KHÔNG GIAN</SectionTitle>
+        <ScrollReveal>
+          <SectionTitle>THEO KHÔNG GIAN</SectionTitle>
+        </ScrollReveal>
 
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6 ">
-          {spaces.map(function (space) {
-            return (
+        <ScrollReveal stagger>
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6">
+            {spaces.map((space) => (
               <Link
                 key={space.name}
                 to={`/products?space=${space.slug}`}
                 className="group"
               >
-                <div className="aspect-[4/3] overflow-hidden bg-[#e9e4de]">
+                <div className="aspect-[4/3] overflow-hidden rounded-2xl bg-[#e9e4de]">
                   <img
                     src={space.image}
                     alt={space.name}
-                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105 rounded-2xl overflow-hidden"
+                    loading="lazy"
+                    className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
                 </div>
 
@@ -75,9 +56,9 @@ function SpacesSection() {
                   {space.name}
                 </h3>
               </Link>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        </ScrollReveal>
       </div>
     </section>
   );

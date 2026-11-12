@@ -67,9 +67,26 @@ type Order = {
   shipping: number;
   total: number;
   status: string;
+  cancellationReason?: string;
+  cancelledAt?: string;
 };
 
 type SectionId = "personal" | "password" | "address" | "favorites" | "orders";
+
+type OrderStatus =
+  | "Đã tiếp nhận"
+  | "Đang xử lý"
+  | "Đang giao hàng"
+  | "Đã giao hàng"
+  | "Đã hủy";
+
+const ORDER_STATUS_TABS: OrderStatus[] = [
+  "Đã tiếp nhận",
+  "Đang xử lý",
+  "Đang giao hàng",
+  "Đã giao hàng",
+  "Đã hủy",
+];
 
 const emptyProfile: ProfileInfo = {
   fullName: "",
@@ -186,39 +203,79 @@ function formatDate(value: string) {
   });
 }
 
-function getOrderStatusClass(status: string) {
-  const normalized = status.toLocaleLowerCase("vi-VN");
+function getOrderStatusGroup(status: string): OrderStatus {
+  const normalized = status.trim().toLocaleLowerCase("vi-VN");
 
   if (
     normalized.includes("hủy") ||
     normalized.includes("huy") ||
     normalized.includes("cancel")
   ) {
-    return "border-red-200 bg-red-50 text-red-700";
+    return "Đã hủy";
   }
 
   if (
+    normalized.includes("đã giao") ||
     normalized.includes("giao thành công") ||
     normalized.includes("hoàn thành") ||
     normalized.includes("delivered") ||
     normalized.includes("completed")
   ) {
-    return "border-green-200 bg-green-50 text-green-700";
+    return "Đã giao hàng";
   }
 
-  return "border-[#d5c8b7] bg-[#f7f1ed] text-[#6e5a47]";
+  if (
+    normalized.includes("đang giao") ||
+    normalized.includes("đang vận chuyển") ||
+    normalized.includes("shipping") ||
+    normalized.includes("delivering")
+  ) {
+    return "Đang giao hàng";
+  }
+
+  if (
+    normalized.includes("đang xử lý") ||
+    normalized.includes("đang chuẩn bị") ||
+    normalized.includes("processing")
+  ) {
+    return "Đang xử lý";
+  }
+
+  // Đơn mới đặt hoặc chưa có trạng thái cụ thể
+  // được xếp vào nhóm đã tiếp nhận.
+  return "Đã tiếp nhận";
+}
+
+function getOrderStatusClass(status: string) {
+  const statusGroup = getOrderStatusGroup(status);
+
+  const classes: Record<OrderStatus, string> = {
+    "Đã tiếp nhận": "border-blue-200 bg-blue-50 text-blue-700",
+    "Đang xử lý": "border-amber-200 bg-amber-50 text-amber-700",
+    "Đang giao hàng": "border-purple-200 bg-purple-50 text-purple-700",
+    "Đã giao hàng": "border-green-200 bg-green-50 text-green-700",
+    "Đã hủy": "border-red-200 bg-red-50 text-red-700",
+  };
+
+  return classes[statusGroup];
 }
 
 function canCancelOrder(status: string): boolean {
-  const normalized = status.trim().toLocaleLowerCase("vi-VN");
+  const statusGroup = getOrderStatusGroup(status);
 
-  return [
-    "đã tiếp nhận",
-    "chờ xác nhận",
-    "đang xử lý",
-    "đang chuẩn bị hàng",
-  ].includes(normalized);
+  return statusGroup === "Đã tiếp nhận" || statusGroup === "Đang xử lý";
 }
+
+// function canCancelOrder(status: string): boolean {
+//   const normalized = status.trim().toLocaleLowerCase("vi-VN");
+
+//   return [
+//     "đã tiếp nhận",
+//     "chờ xác nhận",
+//     "đang xử lý",
+//     "đang chuẩn bị hàng",
+//   ].includes(normalized);
+// }
 
 function Profile() {
   const { toast, confirm } = useFeedback();
@@ -263,11 +320,20 @@ function Profile() {
     session ? readOrders(session.id, session.email) : [],
   );
 
+  const [activeOrderStatus, setActiveOrderStatus] =
+    useState<OrderStatus>("Đã tiếp nhận");
+
+  const [pendingCancelOrderId, setPendingCancelOrderId] = useState<
+    string | null
+  >(null);
+
+  const [cancelReason, setCancelReason] = useState("");
+
+  const [otherCancelReason, setOtherCancelReason] = useState("");
+
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
-  const [error, setError] = useState("");
 
   useEffect(() => {
     function refreshData() {
@@ -322,8 +388,74 @@ function Profile() {
     };
   }, []);
 
+  // Tự động cập nhật mục đang được chọn khi người dùng cuộn trang.
+
+  useEffect(() => {
+    function updateActiveSection() {
+      const sectionElements = menuItems
+        .map((item) => document.getElementById(`profile-${item.id}`))
+        .filter((element): element is HTMLElement => element !== null);
+
+      if (sectionElements.length === 0) return;
+
+      // Nếu đã cuộn gần đến cuối trang,
+      // tự động chọn mục Đơn hàng.
+      const isNearBottom =
+        window.innerHeight + window.scrollY >=
+        document.documentElement.scrollHeight - 80;
+
+      if (isNearBottom) {
+        setActiveSection("orders");
+        return;
+      }
+
+      // Xác định section nằm gần vùng trên của màn hình.
+      const marker = window.scrollY + window.innerHeight * 0.3;
+
+      let currentSection: SectionId = "personal";
+
+      sectionElements.forEach((section) => {
+        const sectionTop = section.getBoundingClientRect().top + window.scrollY;
+
+        if (sectionTop <= marker) {
+          currentSection = section.id.replace("profile-", "") as SectionId;
+        }
+      });
+
+      setActiveSection(currentSection);
+    }
+
+    updateActiveSection();
+
+    window.addEventListener("scroll", updateActiveSection, {
+      passive: true,
+    });
+
+    window.addEventListener("resize", updateActiveSection);
+
+    return () => {
+      window.removeEventListener("scroll", updateActiveSection);
+      window.removeEventListener("resize", updateActiveSection);
+    };
+  }, []);
+
   const favoriteProducts = products.filter((product) =>
     favoriteIds.includes(product.id),
+  );
+
+  const filteredOrders = orders.filter(
+    (order) => getOrderStatusGroup(order.status || "") === activeOrderStatus,
+  );
+
+  const orderStatusCounts = ORDER_STATUS_TABS.reduce(
+    (counts, status) => {
+      counts[status] = orders.filter(
+        (order) => getOrderStatusGroup(order.status || "") === status,
+      ).length;
+
+      return counts;
+    },
+    {} as Record<OrderStatus, number>,
   );
 
   const inputClass =
@@ -331,13 +463,8 @@ function Profile() {
 
   const labelClass = "mb-1.5 block text-[11px] font-medium text-[#3b2f25]";
 
-  function clearMessages() {
-    setError("");
-  }
-
   function navigateToSection(section: SectionId) {
     setActiveSection(section);
-    clearMessages();
 
     window.history.replaceState(null, "", `#${section}`);
 
@@ -363,7 +490,11 @@ function Profile() {
 
   function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    clearMessages();
+
+    if (!session) {
+      toast("Vui lòng đăng nhập để cập nhật thông tin cá nhân.", "warning");
+      return;
+    }
 
     const result = updateCustomerProfile({
       fullName: profile.fullName,
@@ -372,12 +503,7 @@ function Profile() {
     });
 
     if (!result.success) {
-      setError(result.message);
-      return;
-    }
-
-    if (!session) {
-      setError("Vui lòng đăng nhập để cập nhật thông tin cá nhân.");
+      toast(result.message, "error");
       return;
     }
 
@@ -389,16 +515,15 @@ function Profile() {
 
       toast("Thông tin cá nhân đã được cập nhật thành công.", "success");
     } catch {
-      setError("Không thể lưu thông tin cá nhân. Vui lòng thử lại.");
+      toast("Không thể lưu thông tin cá nhân. Vui lòng thử lại.", "error");
     }
   }
 
   function saveAddress(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    clearMessages();
 
     if (!session) {
-      setError("Vui lòng đăng nhập để cập nhật địa chỉ.");
+      toast("Vui lòng đăng nhập để cập nhật địa chỉ.", "warning");
       return;
     }
 
@@ -410,33 +535,32 @@ function Profile() {
 
       toast("Địa chỉ giao hàng đã được lưu thành công.", "success");
     } catch {
-      setError("Không thể lưu địa chỉ. Vui lòng thử lại.");
+      toast("Không thể lưu địa chỉ. Vui lòng thử lại.", "error");
     }
   }
 
   function changePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    clearMessages();
 
     if (!currentPassword || !newPassword || !confirmPassword) {
-      setError("Vui lòng nhập đầy đủ các trường mật khẩu.");
+      toast("Vui lòng nhập đầy đủ các trường mật khẩu.", "warning");
       return;
     }
 
     if (newPassword.length < 8) {
-      setError("Mật khẩu mới phải có ít nhất 8 ký tự.");
+      toast("Mật khẩu mới phải có ít nhất 8 ký tự.", "warning");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setError("Mật khẩu xác nhận không khớp.");
+      toast("Mật khẩu xác nhận không khớp.", "warning");
       return;
     }
 
     const result = changeCustomerPassword(currentPassword, newPassword);
 
     if (!result.success) {
-      setError(result.message);
+      toast(result.message, "error");
       return;
     }
 
@@ -450,8 +574,8 @@ function Profile() {
   function removeFavorite(productId: number) {
     toggleProductFavorite(productId);
     setFavoriteIds(getFavoriteIds());
+
     toast("Đã xóa sản phẩm khỏi danh sách yêu thích.", "success");
-    setError("");
   }
 
   async function handleLogout() {
@@ -469,42 +593,49 @@ function Profile() {
     navigate("/login", { replace: true });
   }
 
-  async function handleCancelOrder(orderId: string) {
-    clearMessages();
+  function handleCancelOrder(orderId: string) {
+    setPendingCancelOrderId(orderId);
+    setCancelReason("");
+    setOtherCancelReason("");
+  }
+  async function confirmCancelOrder() {
+    if (!pendingCancelOrderId) return;
 
-    if (!session) {
-      setError("Vui lòng đăng nhập để hủy đơn hàng.");
+    const finalReason =
+      cancelReason === "Lý do khác" ? otherCancelReason.trim() : cancelReason;
+
+    if (!finalReason) {
+      toast("Vui lòng chọn hoặc nhập lý do hủy đơn hàng.", "warning");
       return;
     }
 
-    const confirmed = await confirm({
-      title: "Hủy đơn hàng?",
-      message:
-        "Bạn có chắc chắn muốn hủy đơn hàng này không? Số lượng sản phẩm sẽ được hoàn lại kho.",
-      confirmText: "Hủy đơn hàng",
-      danger: true,
-    });
+    if (!session) {
+      toast("Vui lòng đăng nhập để hủy đơn hàng.", "warning");
+      return;
+    }
 
-    if (!confirmed) return;
-
+    const orderId = pendingCancelOrderId;
     const userOrdersKey = getUserStorageKey(ORDERS_STORAGE_KEY, session.id);
 
-    // Đọc lại dữ liệu mới nhất để tránh hủy đơn đã được xử lý trước đó.
+    // Đọc lại dữ liệu mới nhất
     const latestOrders = readOrders(session.id, session.email);
+
     const targetOrder = latestOrders.find((order) => order.id === orderId);
 
     if (!targetOrder) {
       toast("Không tìm thấy đơn hàng cần hủy.", "error");
+      setPendingCancelOrderId(null);
       return;
     }
 
     if (!canCancelOrder(targetOrder.status || "")) {
       toast("Đơn hàng này không còn được phép hủy.", "warning");
       setOrders(latestOrders);
+      setPendingCancelOrderId(null);
       return;
     }
 
-    // Gộp sản phẩm trùng ID và kích thước.
+    // Gộp sản phẩm trùng ID và kích thước
     const quantityMap = new Map<string, StockUpdate>();
 
     for (const item of targetOrder.items) {
@@ -539,7 +670,7 @@ function Profile() {
       }
     }
 
-    // Lưu tồn kho hiện tại để có thể khôi phục nếu không lưu được đơn.
+    // Lưu tồn kho cũ để khôi phục khi cần
     const previousStock: StockUpdate[] = [];
     const nextStock: StockUpdate[] = [];
 
@@ -559,20 +690,34 @@ function Profile() {
       });
     }
 
-    // Hoàn kho trước, chỉ cập nhật đơn nếu thao tác thành công.
+    // Hoàn kho trước khi cập nhật trạng thái đơn
     if (nextStock.length > 0 && !setMultipleStock(nextStock)) {
       toast("Không thể hoàn lại tồn kho. Vui lòng thử lại.", "error");
       return;
     }
 
     const updatedOrders = latestOrders.map((order) =>
-      order.id === orderId ? { ...order, status: "Đã hủy" } : order,
+      order.id === orderId
+        ? {
+            ...order,
+            status: "Đã hủy",
+            cancellationReason: finalReason,
+            cancelledAt: new Date().toISOString(),
+          }
+        : order,
     );
 
     try {
       localStorage.setItem(userOrdersKey, JSON.stringify(updatedOrders));
 
       setOrders(updatedOrders);
+
+      setPendingCancelOrderId(null);
+      setCancelReason("");
+      setOtherCancelReason("");
+
+      setActiveOrderStatus("Đã hủy");
+
       toast(
         "Đã hủy đơn hàng thành công. Số lượng sản phẩm đã được hoàn lại kho.",
         "success",
@@ -580,7 +725,7 @@ function Profile() {
 
       window.dispatchEvent(new Event("ordersUpdated"));
     } catch {
-      // Nếu không lưu được trạng thái đơn, khôi phục tồn kho cũ.
+      // Khôi phục tồn kho nếu không lưu được đơn hàng
       const restored = setMultipleStock(previousStock);
 
       toast(
@@ -666,15 +811,6 @@ function Profile() {
           {/* KHU VỰC NỘI DUNG */}
 
           <div className="min-w-0 space-y-7">
-            {error && (
-              <div
-                role="alert"
-                className="border border-[#e6c7c1] bg-[#fff4f1] px-4 py-3 text-xs leading-5 text-[#9b3930]"
-              >
-                {error}
-              </div>
-            )}
-
             {/* THÔNG TIN CÁ NHÂN */}
 
             <section
@@ -1073,6 +1209,42 @@ function Profile() {
                 </span>
               </div>
 
+              {/* BỘ LỌC TRẠNG THÁI ĐƠN HÀNG */}
+
+              <div className="mt-5 overflow-x-auto pb-2">
+                <div className="flex min-w-max gap-2">
+                  {ORDER_STATUS_TABS.map((status) => {
+                    const isActive = activeOrderStatus === status;
+                    const count = orderStatusCounts[status];
+
+                    return (
+                      <button
+                        key={status}
+                        type="button"
+                        onClick={() => setActiveOrderStatus(status)}
+                        className={`flex min-w-[140px] items-center justify-center gap-2 border px-4 py-3 text-[10px] font-medium transition ${
+                          isActive
+                            ? "border-[#3b2f25] bg-[#3b2f25] text-white"
+                            : "border-[#e3dad2] bg-[#faf8f6] text-[#6e5a47] hover:border-[#9c8877] hover:bg-[#f1e9e2]"
+                        }`}
+                      >
+                        <span>{status}</span>
+
+                        <span
+                          className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[9px] font-semibold ${
+                            isActive
+                              ? "bg-white text-[#3b2f25]"
+                              : "bg-[#e8ddd3] text-[#51463d]"
+                          }`}
+                        >
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {orders.length === 0 ? (
                 <div className="py-10 text-center">
                   <div className="text-3xl text-[#a99a8d]">▤</div>
@@ -1092,9 +1264,22 @@ function Profile() {
                     MUA SẮM NGAY
                   </Link>
                 </div>
+              ) : filteredOrders.length === 0 ? (
+                <div className="py-12 text-center">
+                  <div className="text-3xl text-[#a99a8d]">▤</div>
+
+                  <p className="mt-3 text-sm font-medium text-[#2d261f]">
+                    Không có đơn hàng ở trạng thái này
+                  </p>
+
+                  <p className="mt-2 text-xs leading-5 text-[#756b63]">
+                    Các đơn hàng thuộc trạng thái "{activeOrderStatus}" sẽ hiển
+                    thị tại đây.
+                  </p>
+                </div>
               ) : (
                 <div className="mt-5 space-y-5">
-                  {orders.map((order) => (
+                  {filteredOrders.map((order) => (
                     <article
                       key={order.id}
                       className="border border-[#e3dad2] p-4 md:p-5"
@@ -1118,7 +1303,7 @@ function Profile() {
                           <span
                             className={`shrink-0 border px-2.5 py-1 text-[10px] ${getOrderStatusClass(order.status || "")}`}
                           >
-                            {order.status || "Đã đặt hàng"}
+                            {getOrderStatusGroup(order.status || "")}
                           </span>
 
                           {canCancelOrder(order.status || "") && (
@@ -1265,6 +1450,125 @@ function Profile() {
           </div>
         </div>
       </section>
+
+      {/* MODAL XÁC NHẬN HỦY ĐƠN */}
+
+      {pendingCancelOrderId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 px-4 py-6">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-order-title"
+            className="max-h-[90vh] w-full max-w-md overflow-y-auto bg-white p-5 shadow-xl md:p-7"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-[#e5ddd6] pb-4">
+              <div>
+                <p className="text-[10px] tracking-[0.18em] text-[#9a8878]">
+                  NESTA FURNITURE
+                </p>
+
+                <h2
+                  id="cancel-order-title"
+                  className="mt-2 text-base font-semibold text-[#2d261f]"
+                >
+                  HỦY ĐƠN HÀNG
+                </h2>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setPendingCancelOrderId(null)}
+                aria-label="Đóng hộp thoại"
+                className="text-xl text-[#8c8178] transition hover:text-[#2d261f]"
+              >
+                ×
+              </button>
+            </div>
+
+            <p className="mt-4 text-xs leading-5 text-[#756b63]">
+              Bạn vui lòng cho NESTA biết lý do muốn hủy đơn hàng. Thông tin này
+              sẽ được lưu cùng đơn hàng sau khi xác nhận.
+            </p>
+
+            <div className="mt-5">
+              <label
+                htmlFor="cancelReason"
+                className="mb-2 block text-xs font-semibold text-[#3b2f25]"
+              >
+                Lý do hủy đơn hàng <span className="text-red-600">*</span>
+              </label>
+
+              <select
+                id="cancelReason"
+                value={cancelReason}
+                onChange={(event) => {
+                  setCancelReason(event.target.value);
+                  setOtherCancelReason("");
+                }}
+                className="h-11 w-full border border-[#cfc5bc] bg-white px-3 text-xs text-[#2d261f] outline-none focus:border-[#6e5a47]"
+              >
+                <option value="">-- Chọn lý do hủy đơn --</option>
+                <option value="Đặt nhầm sản phẩm">Đặt nhầm sản phẩm</option>
+                <option value="Muốn thay đổi sản phẩm hoặc số lượng">
+                  Muốn thay đổi sản phẩm hoặc số lượng
+                </option>
+                <option value="Muốn thay đổi địa chỉ nhận hàng">
+                  Muốn thay đổi địa chỉ nhận hàng
+                </option>
+                <option value="Thời gian giao hàng không phù hợp">
+                  Thời gian giao hàng không phù hợp
+                </option>
+                <option value="Tìm được sản phẩm phù hợp hơn">
+                  Tìm được sản phẩm phù hợp hơn
+                </option>
+                <option value="Lý do khác">Lý do khác</option>
+              </select>
+            </div>
+
+            {cancelReason === "Lý do khác" && (
+              <div className="mt-4">
+                <label
+                  htmlFor="otherCancelReason"
+                  className="mb-2 block text-xs font-semibold text-[#3b2f25]"
+                >
+                  Nhập lý do cụ thể <span className="text-red-600">*</span>
+                </label>
+
+                <textarea
+                  id="otherCancelReason"
+                  rows={3}
+                  value={otherCancelReason}
+                  onChange={(event) => setOtherCancelReason(event.target.value)}
+                  placeholder="Vui lòng nhập lý do hủy đơn hàng..."
+                  className="w-full resize-none border border-[#cfc5bc] bg-white p-3 text-xs text-[#2d261f] outline-none placeholder:text-[#a59a91] focus:border-[#6e5a47]"
+                />
+              </div>
+            )}
+
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => setPendingCancelOrderId(null)}
+                className="flex-1 border border-[#cfc5bc] px-4 py-3 text-[10px] font-medium text-[#51463d] transition hover:bg-[#f7f1ed]"
+              >
+                QUAY LẠI
+              </button>
+
+              <button
+                type="button"
+                disabled={
+                  !cancelReason ||
+                  (cancelReason === "Lý do khác" && !otherCancelReason.trim())
+                }
+                onClick={confirmCancelOrder}
+                className="flex-1 bg-red-700 px-4 py-3 text-[10px] font-medium text-white transition hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                XÁC NHẬN HỦY ĐƠN
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
