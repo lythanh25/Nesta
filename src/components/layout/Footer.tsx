@@ -12,10 +12,10 @@ function Footer() {
             <h4 className="text-lg font-semibold ">Về công ty</h4>
 
             <div className="mt-4 flex flex-col gap-3 text-sm text-white/60">
-              <a href="/">Giới thiệu</a>
-              <a href="/">Thông tin báo chí</a>
-              <a href="/">Tuyển dụng</a>
-              <a href="/">Đổi trả hàng</a>
+              <a href="/" className="hover:text-[#c5a98c]">Giới thiệu</a>
+              <a href="/" className="hover:text-[#c5a98c]">Thông tin báo chí</a>
+              <a href="/" className="hover:text-[#c5a98c]">Tuyển dụng</a>
+              <a href="/" className="hover:text-[#c5a98c]">Đổi trả hàng</a>
             </div>
           </div>
 
@@ -23,10 +23,10 @@ function Footer() {
             <h4 className="text-lg font-semibold">Chăm sóc khách hàng</h4>
 
             <div className="mt-4 flex flex-col gap-3 text-sm text-white/60">
-              <a href="/">Các câu hỏi thường gặp</a>
-              <a href="/">Hướng dẫn mua sắm</a>
-              <a href="/">Thông tin vận chuyển</a>
-              <a href="/">Liên hệ qua email</a>
+              <a href="/" className="hover:text-[#c5a98c]">Các câu hỏi thường gặp</a>
+              <a href="/" className="hover:text-[#c5a98c]">Hướng dẫn mua sắm</a>
+              <a href="/" className="hover:text-[#c5a98c]">Thông tin vận chuyển</a>
+              <a href="/" className="hover:text-[#c5a98c]">Liên hệ qua email</a>
             </div>
           </div>
 
@@ -34,10 +34,12 @@ function Footer() {
             <h4 className="text-lg font-semibold">Điều khoản và chính sách</h4>
 
             <div className="mt-4 flex flex-col gap-3 text-sm text-white/60">
-              <a href="/">Điều khoản sử dụng</a>
-              <a href="/">Điều khoản bán hàng</a>
-              <a href="/">Chính sách bảo mật</a>
-              <a href="/">Thuật ngữ cửa hàng</a>
+              <a href="/" className="hover:text-[#c5a98c]">
+                Điều khoản sử dụng
+              </a>
+              <a href="/" className="hover:text-[#c5a98c]">Điều khoản bán hàng</a>
+              <a href="/" className="hover:text-[#c5a98c]">Chính sách bảo mật</a>
+              <a href="/" className="hover:text-[#c5a98c]">Thuật ngữ cửa hàng</a>
             </div>
           </div>
 
@@ -67,22 +69,22 @@ function Footer() {
               <img
                 src={Telegram}
                 alt="telegram"
-                className="cursor-pointer hover:scale-110"
+                className="cursor-pointer flex h-7 w-7 items-center justify-center rounded-full  transition-all duration-300   hover:-translate-y-1"
               />
               <img
                 src={Instagram}
                 alt="instagram"
-                className="cursor-pointer hover:scale-110"
+                className="cursor-pointer flex h-7 w-7 items-center justify-center rounded-full  transition-all duration-300   hover:-translate-y-1"
               />
               <img
                 src={Facebook}
                 alt="facebook"
-                className="cursor-pointer hover:scale-110"
+                className="cursor-pointer flex h-7 w-7 items-center justify-center rounded-full  transition-all duration-300   hover:-translate-y-1"
               />
               <img
                 src={Youtube}
                 alt="youtube"
-                className="cursor-pointer hover:scale-110"
+                className="cursor-pointer flex h-7 w-7 items-center justify-center rounded-full  transition-all duration-300   hover:-translate-y-1"
               />
             </div>
           </div>
