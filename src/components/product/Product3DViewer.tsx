@@ -169,7 +169,7 @@ export default function Product3DViewer({
               makeDefault
               enableRotate
               enableZoom
-              enablePan
+              enablePan={false}
               minDistance={0.5}
               maxDistance={20}
               dampingFactor={0.08}
@@ -181,7 +181,7 @@ export default function Product3DViewer({
         {/* Hướng dẫn thao tác */}
         <div className="pointer-events-none absolute bottom-5 left-1/2 z-20 w-max max-w-[calc(100%-2rem)] -translate-x-1/2">
           <div className="rounded-full bg-black/60 px-4 py-3 text-center text-xs text-white/90 backdrop-blur-md md:px-5">
-            Kéo chuột trái để xoay • Cuộn để zoom • Giữ chuột phải để di chuyển
+            Kéo chuột trái để xoay • Cuộn chuột để phóng to hoặc thu nhỏ
           </div>
         </div>
       </div>

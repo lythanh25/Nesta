@@ -73,13 +73,13 @@ function normalizeText(value: string): string {
 
 /**
  * Tìm theo từ trong tên, danh mục và danh mục con.
- * Từ ngắn (1-2 ký tự) phải khớp nguyên từ: "tủ" không khớp "tượng".
- * Từ >= 3 ký tự có thể khớp đầu từ để hỗ trợ gợi ý khi đang gõ.
+ * Hỗ trợ tìm kiếm ngay cả khi người dùng mới gõ 1 ký tự.
  */
 function matchesKeyword(text: string, search: string): boolean {
   const words = normalizeText(text)
     .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean);
+
   const searchWords = normalizeText(search)
     .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean);
@@ -87,11 +87,7 @@ function matchesKeyword(text: string, search: string): boolean {
   if (searchWords.length === 0) return false;
 
   return searchWords.every((searchWord) =>
-    words.some(
-      (word) =>
-        word === searchWord ||
-        (searchWord.length >= 3 && word.startsWith(searchWord)),
-    ),
+    words.some((word) => word === searchWord || word.startsWith(searchWord)),
   );
 }
 
