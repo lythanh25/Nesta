@@ -124,6 +124,8 @@ export type Product = {
 
   sizes?: ProductSize[];
   model3D?: string;
+
+  discontinued?: boolean;
 };
 
 // =====================================================
@@ -426,44 +428,6 @@ export const products: Product[] = [
       createSize("260 cm", 260, 90, 80, 11500000),
       createSize("300 cm", 300, 90, 80, 13000000),
     ],
-  },
-
-  // ===================================================
-  // GHẾ
-  // ===================================================
-
-  // Khôi phục sản phẩm Modern Chair từ thông tin đã cung cấp.
-  // Dùng id 16 để không trùng với Sofa_3 (id 6).
-  {
-    id: 16,
-    name: "Modern Chair",
-    price: 2800000,
-
-    category: "Ghế",
-    subcategory: "Ghế ăn",
-    rooms: ["Phòng ăn", "Phòng khách", "Phòng làm việc"],
-
-    // Giữ ảnh gốc; khi có Chair_1_1.jpg...Chair_1_5.jpg
-    // có thể thay bằng getGallery("Chair_1") và getHoverImage("Chair_1").
-    images: [
-      "https://images.unsplash.com/photo-1592078615290-033ee584e267?auto=format&fit=crop&w=800&q=80",
-    ],
-
-    description:
-      "Modern Chair phù hợp cho phòng khách, phòng đọc sách hoặc không gian làm việc.",
-
-    detailDescription:
-      "Modern Chair có thiết kế đơn giản và thanh lịch, dễ dàng kết hợp với nhiều loại bàn và không gian nội thất khác nhau.",
-
-    specifications: {
-      "Chất liệu": "Gỗ và vải",
-      "Phong cách": "Hiện đại",
-      "Màu sắc": "Nâu",
-      "Xuất xứ": "Việt Nam",
-      "Bảo hành": "12 tháng",
-    },
-
-    sizes: [createSize("Tiêu chuẩn", 50, 55, 80)],
   },
 
   // ===================================================
@@ -1395,30 +1359,6 @@ export const products: Product[] = [
     model3D: legacyBedModel,
   },
   {
-    id: 38,
-    name: "Minimal Bed",
-    price: 9800000,
-    inStock: false,
-    category: "Giường",
-    subcategory: "Giường ngủ",
-    rooms: ["Phòng ngủ"],
-    images: [
-      "https://images.unsplash.com/photo-1505693416388-ac5ce068fe85?auto=format&fit=crop&w=800&q=80",
-    ],
-    description:
-      "Giường ngủ tối giản với thiết kế hiện đại, tạo cảm giác thoải mái cho phòng ngủ.",
-    detailDescription:
-      "Minimal Bed sở hữu thiết kế tối giản, tập trung vào sự cân bằng giữa công năng và thẩm mỹ. Kiểu dáng thanh thoát giúp sản phẩm dễ dàng kết hợp với nhiều phong cách phòng ngủ hiện đại.",
-    specifications: {
-      "Chất liệu": "Gỗ công nghiệp",
-      "Phong cách": "Tối giản",
-      "Màu sắc": "Nâu sáng",
-      "Xuất xứ": "Việt Nam",
-      "Bảo hành": "12 tháng",
-    },
-    sizes: [createSize("1m6", 160, 200, 100), createSize("1m8", 180, 200, 100)],
-  },
-  {
     id: 39,
     name: "Wooden Bed",
     price: 8500000,
@@ -1440,33 +1380,6 @@ export const products: Product[] = [
       "Bảo hành": "12 tháng",
     },
     sizes: [createSize("1m6", 160, 200, 100), createSize("1m8", 180, 200, 100)],
-  },
-  {
-    id: 40,
-    name: "Modern Sofa",
-    price: 6500000,
-    category: "Sofa",
-    subcategory: "Sofa phòng khách",
-    rooms: ["Phòng khách"],
-    images: [
-      "https://images.unsplash.com/photo-1550254478-ead40cc54513?auto=format&fit=crop&w=800&q=80",
-    ],
-    description:
-      "Modern Sofa với kiểu dáng hiện đại, phù hợp cho không gian phòng khách rộng.",
-    detailDescription:
-      "Modern Sofa mang phong cách hiện đại với thiết kế cân đối và đường nét tinh gọn. Sản phẩm phù hợp cho phòng khách gia đình, căn hộ hoặc các không gian nội thất theo phong cách đương đại.",
-    specifications: {
-      "Chất liệu": "Vải cao cấp và gỗ",
-      "Phong cách": "Hiện đại",
-      "Màu sắc": "Be",
-      "Xuất xứ": "Việt Nam",
-      "Bảo hành": "12 tháng",
-    },
-    sizes: [
-      createSize("180 cm", 180, 90, 80),
-      createSize("220 cm", 220, 90, 80),
-      createSize("260 cm", 260, 90, 80),
-    ],
   },
   {
     id: 41,
@@ -1491,29 +1404,7 @@ export const products: Product[] = [
     },
     sizes: [createSize("Tiêu chuẩn", 70, 75, 80)],
   },
-  {
-    id: 42,
-    name: "Modern Chair",
-    price: 2800000,
-    category: "Ghế",
-    subcategory: "Ghế ăn",
-    rooms: ["Phòng khách", "Phòng ăn", "Phòng làm việc"],
-    images: [
-      "https://images.unsplash.com/photo-1592078615290-033ee584e267?auto=format&fit=crop&w=800&q=80",
-    ],
-    description:
-      "Modern Chair phù hợp cho phòng khách, phòng đọc sách hoặc không gian làm việc.",
-    detailDescription:
-      "Modern Chair có thiết kế đơn giản và thanh lịch, dễ dàng kết hợp với nhiều loại bàn và không gian nội thất khác nhau.",
-    specifications: {
-      "Chất liệu": "Gỗ và vải",
-      "Phong cách": "Hiện đại",
-      "Màu sắc": "Nâu",
-      "Xuất xứ": "Việt Nam",
-      "Bảo hành": "12 tháng",
-    },
-    sizes: [createSize("Tiêu chuẩn", 50, 55, 80)],
-  },
+
   {
     id: 43,
     name: "Nordic Coffee Table",

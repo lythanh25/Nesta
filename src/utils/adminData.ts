@@ -48,7 +48,9 @@ export type AdminOrder = {
   subtotal: number;
   shipping: number;
   total: number;
-  status: string;
+  status: OrderStatus;
+  cancellationReason?: string;
+  cancelledAt?: string;
 };
 
 export type AdminEmployee = {
@@ -189,66 +191,71 @@ function isAdminOrder(value: unknown): value is AdminOrder {
 export function updateOrderStatus(
   orderId: string,
   status: OrderStatus,
+  cancellationInfo?: {
+    cancellationReason: string;
+    cancelledAt: string;
+  },
 ): boolean {
   const users = readCustomers();
   let updated = false;
 
-  for (const user of users) {
-    const key = `${ADMIN_STORAGE_KEYS.orders}:${user.id}`;
-    const orders = readStorage<unknown>(key, []);
+  const updateOrders = (orders: unknown[]): unknown[] => {
+    return orders.map((item) => {
+      if (
+        !item ||
+        typeof item !== "object" ||
+        (item as Partial<AdminOrder>).id !== orderId
+      ) {
+        return item;
+      }
 
-    if (!Array.isArray(orders)) continue;
-
-    const index = orders.findIndex(
-      (item) =>
-        item &&
-        typeof item === "object" &&
-        (item as Partial<AdminOrder>).id === orderId,
-    );
-
-    if (index === -1) continue;
-
-    const nextOrders = [...orders];
-    nextOrders[index] = {
-      ...(nextOrders[index] as AdminOrder),
-      status,
-    };
-
-    try {
-      localStorage.setItem(key, JSON.stringify(nextOrders));
       updated = true;
-    } catch {
-      return false;
-    }
-  }
 
-  const legacyOrders = readStorage<unknown>(ADMIN_STORAGE_KEYS.orders, []);
+      const currentOrder = item as AdminOrder;
 
-  if (Array.isArray(legacyOrders)) {
-    const index = legacyOrders.findIndex(
-      (item) =>
-        item &&
-        typeof item === "object" &&
-        (item as Partial<AdminOrder>).id === orderId,
-    );
-
-    if (index !== -1) {
-      const nextOrders = [...legacyOrders];
-      nextOrders[index] = {
-        ...(nextOrders[index] as AdminOrder),
+      return {
+        ...currentOrder,
         status,
+        ...(cancellationInfo
+          ? {
+              cancellationReason: cancellationInfo.cancellationReason,
+              cancelledAt: cancellationInfo.cancelledAt,
+            }
+          : {}),
       };
+    });
+  };
 
-      try {
-        localStorage.setItem(
-          ADMIN_STORAGE_KEYS.orders,
-          JSON.stringify(nextOrders),
-        );
-        updated = true;
-      } catch {
-        return false;
+  try {
+    for (const user of users) {
+      const key = `${ADMIN_STORAGE_KEYS.orders}:${user.id}`;
+      const orders = readStorage<unknown>(key, []);
+
+      if (!Array.isArray(orders)) continue;
+
+      const nextOrders = updateOrders(orders);
+
+      if (nextOrders.some((item, index) => item !== orders[index])) {
+        localStorage.setItem(key, JSON.stringify(nextOrders));
       }
     }
+
+    const legacyOrders = readStorage<unknown>(ADMIN_STORAGE_KEYS.orders, []);
+
+    if (Array.isArray(legacyOrders)) {
+      const nextLegacyOrders = updateOrders(legacyOrders);
+
+      if (
+        nextLegacyOrders.some((item, index) => item !== legacyOrders[index])
+      ) {
+        localStorage.setItem(
+          ADMIN_STORAGE_KEYS.orders,
+          JSON.stringify(nextLegacyOrders),
+        );
+      }
+    }
+  } catch {
+    return false;
   }
 
   if (updated) {

@@ -266,17 +266,6 @@ function canCancelOrder(status: string): boolean {
   return statusGroup === "Đã tiếp nhận" || statusGroup === "Đang xử lý";
 }
 
-// function canCancelOrder(status: string): boolean {
-//   const normalized = status.trim().toLocaleLowerCase("vi-VN");
-
-//   return [
-//     "đã tiếp nhận",
-//     "chờ xác nhận",
-//     "đang xử lý",
-//     "đang chuẩn bị hàng",
-//   ].includes(normalized);
-// }
-
 function Profile() {
   const { toast, confirm } = useFeedback();
   const navigate = useNavigate();

@@ -1,26 +1,44 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  deleteProduct,
   getProducts,
   subscribeToProducts,
   updateProduct,
 } from "../../utils/productStorage";
-import {
-  getAllStock,
-  removeStockForProduct,
-  setMultipleStock,
-  subscribeToStock,
-  type StockUpdate,
-} from "../../utils/stock";
+import { getAllStock, subscribeToStock } from "../../utils/stock";
 import { productCategories, type Product } from "../../data/products";
 import { useFeedback } from "../../components/feedback/useFeedback";
 import AdminProductForm from "./AdminProductForm";
+import AdminProductStockModal from "./AdminProductStockModal";
+
+const LOW_STOCK_THRESHOLD = 5;
+
+type ProductStatus =
+  | "Còn hàng"
+  | "Sắp hết hàng"
+  | "Hết hàng"
+  | "Ngừng kinh doanh";
+
+const STATUS_OPTIONS: ProductStatus[] = [
+  "Còn hàng",
+  "Sắp hết hàng",
+  "Hết hàng",
+  "Ngừng kinh doanh",
+];
 
 const formatPrice = (price: number) =>
   new Intl.NumberFormat("vi-VN", {
     style: "currency",
     currency: "VND",
   }).format(price);
+
+function normalizeText(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .trim();
+}
 
 function getProductStock(
   product: Product,
@@ -36,13 +54,45 @@ function getProductStock(
   return stockMap[String(product.id)] ?? 0;
 }
 
+function getProductStatus(
+  product: Product,
+  stockMap: Record<string, number>,
+): ProductStatus {
+  if (product.discontinued) return "Ngừng kinh doanh";
+
+  const stock = getProductStock(product, stockMap);
+
+  if (stock <= 0) return "Hết hàng";
+  if (stock <= LOW_STOCK_THRESHOLD) return "Sắp hết hàng";
+
+  return "Còn hàng";
+}
+
+function getStatusClass(status: ProductStatus): string {
+  switch (status) {
+    case "Còn hàng":
+      return "bg-green-50 text-green-700";
+    case "Sắp hết hàng":
+      return "bg-amber-50 text-amber-700";
+    case "Hết hàng":
+      return "bg-red-50 text-red-700";
+    case "Ngừng kinh doanh":
+      return "bg-gray-100 text-gray-600";
+  }
+}
+
 export default function AdminProducts() {
   const { toast, confirm } = useFeedback();
+
   const [products, setProducts] = useState<Product[]>(() => getProducts());
   const [stockMap, setStockMap] = useState(() => getAllStock());
+
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState("Tất cả");
+  const [stockStatus, setStockStatus] = useState("Tất cả");
+
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [stockProduct, setStockProduct] = useState<Product | null>(null);
   const [showForm, setShowForm] = useState(false);
 
   const refreshProducts = useCallback(() => {
@@ -64,21 +114,25 @@ export default function AdminProducts() {
   }, [refreshProducts, refreshStock]);
 
   const filteredProducts = useMemo(() => {
-    const normalizedKeyword = keyword.trim().toLowerCase();
+    const normalizedKeyword = normalizeText(keyword);
 
     return products.filter((product) => {
       const matchesKeyword =
         !normalizedKeyword ||
-        product.name.toLowerCase().includes(normalizedKeyword) ||
+        normalizeText(product.name).includes(normalizedKeyword) ||
         String(product.id).includes(normalizedKeyword) ||
-        product.subcategory.toLowerCase().includes(normalizedKeyword);
+        normalizeText(product.category).includes(normalizedKeyword) ||
+        normalizeText(product.subcategory).includes(normalizedKeyword);
 
       const matchesCategory =
         category === "Tất cả" || product.category === category;
 
-      return matchesKeyword && matchesCategory;
+      const status = getProductStatus(product, stockMap);
+      const matchesStatus = stockStatus === "Tất cả" || status === stockStatus;
+
+      return matchesKeyword && matchesCategory && matchesStatus;
     });
-  }, [products, keyword, category]);
+  }, [products, stockMap, keyword, category, stockStatus]);
 
   const openCreateForm = () => {
     setEditingProduct(null);
@@ -97,84 +151,43 @@ export default function AdminProducts() {
     refreshStock();
   };
 
-  const handleMarkOutOfStock = (product: Product) => {
-    if (product.sizes?.length) {
-      const updates: StockUpdate[] = product.sizes.map((size) => ({
-        productId: product.id,
-        size: size.label,
-        quantity: 0,
-      }));
+  const handleToggleDiscontinued = async (product: Product) => {
+    const isDiscontinued = product.discontinued === true;
 
-      if (!setMultipleStock(updates)) {
-        toast("Không thể cập nhật tồn kho. Vui lòng thử lại.", "error");
-        return;
-      }
-    } else if (!setMultipleStock([{ productId: product.id, quantity: 0 }])) {
-      toast("Không thể cập nhật tồn kho. Vui lòng thử lại.", "error");
-      return;
-    }
+    const confirmed = await confirm({
+      title: isDiscontinued
+        ? "Khôi phục kinh doanh?"
+        : "Ngừng kinh doanh sản phẩm?",
+      message: isDiscontinued
+        ? `Bạn có chắc muốn khôi phục "${product.name}"? Sản phẩm sẽ được hiển thị trở lại tại cửa hàng nếu còn hàng.`
+        : `Bạn có chắc muốn ngừng kinh doanh "${product.name}"? Sản phẩm sẽ không còn được hiển thị để khách hàng mua, nhưng thông tin và tồn kho vẫn được giữ lại.`,
+      confirmText: isDiscontinued ? "Khôi phục kinh doanh" : "Ngừng kinh doanh",
+      danger: !isDiscontinued,
+    });
+
+    if (!confirmed) return;
 
     const updatedProduct: Product = {
       ...product,
-      stock: 0,
-      inStock: false,
-      ...(product.sizes?.length
-        ? {
-            sizes: product.sizes.map((size) => ({
-              ...size,
-              stock: 0,
-            })),
-          }
-        : {}),
+      discontinued: !isDiscontinued,
     };
 
     if (!updateProduct(updatedProduct)) {
-      // Tồn kho đã được đặt về 0; thông báo nếu không lưu được thông tin sản phẩm.
-      refreshProducts();
-      refreshStock();
       toast(
-        "Tồn kho đã được đặt về 0, nhưng không thể lưu trạng thái sản phẩm. Vui lòng kiểm tra lại.",
+        "Không thể cập nhật trạng thái sản phẩm. Vui lòng thử lại.",
         "error",
       );
       return;
     }
 
     refreshProducts();
-    refreshStock();
-    toast(`Đã đánh dấu "${product.name}" hết hàng.`, "success");
-  };
 
-  const handleDelete = async (product: Product) => {
-    const confirmed = await confirm({
-      title: "Xóa sản phẩm?",
-      message: `Bạn có chắc muốn XÓA HẲN "${product.name}" khỏi danh mục sản phẩm không? Thao tác này không thể hoàn tác bằng nút Sửa.`,
-      confirmText: "Xóa sản phẩm",
-      danger: true,
-    });
-
-    if (!confirmed) return;
-
-    if (!deleteProduct(product.id)) {
-      refreshProducts();
-      refreshStock();
-      toast("Không thể xóa sản phẩm. Vui lòng thử lại.", "error");
-      return;
-    }
-
-    const stockRemoved = removeStockForProduct(product.id);
-
-    refreshProducts();
-    refreshStock();
-
-    if (!stockRemoved) {
-      toast(
-        "Sản phẩm đã được xóa nhưng dữ liệu tồn kho cũ chưa được dọn sạch.",
-        "warning",
-      );
-      return;
-    }
-
-    toast("Đã xóa hẳn sản phẩm khỏi danh mục ứng dụng.", "success");
+    toast(
+      isDiscontinued
+        ? `Đã khôi phục kinh doanh "${product.name}".`
+        : `Đã ngừng kinh doanh "${product.name}".`,
+      "success",
+    );
   };
 
   const totalProducts = products.length;
@@ -184,9 +197,29 @@ export default function AdminProducts() {
     0,
   );
 
-  const outOfStock = products.filter(
-    (product) => getProductStock(product, stockMap) <= 0,
-  ).length;
+  const statusCounts = useMemo(() => {
+    const counts: Record<ProductStatus, number> = {
+      "Còn hàng": 0,
+      "Sắp hết hàng": 0,
+      "Hết hàng": 0,
+      "Ngừng kinh doanh": 0,
+    };
+
+    products.forEach((product) => {
+      counts[getProductStatus(product, stockMap)] += 1;
+    });
+
+    return counts;
+  }, [products, stockMap]);
+
+  const clearFilters = () => {
+    setKeyword("");
+    setCategory("Tất cả");
+    setStockStatus("Tất cả");
+  };
+
+  const hasActiveFilters =
+    keyword !== "" || category !== "Tất cả" || stockStatus !== "Tất cả";
 
   return (
     <div className="min-w-0 space-y-6 text-[#2d261f]">
@@ -211,10 +244,14 @@ export default function AdminProducts() {
         </button>
       </div>
 
+      {/* Thống kê */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-[#e9e1da] bg-white p-5">
           <p className="text-sm text-[#8b8178]">Tổng sản phẩm</p>
           <p className="mt-2 text-2xl font-semibold">{totalProducts}</p>
+          <p className="mt-1 text-xs text-[#8b8178]">
+            Bao gồm cả sản phẩm ngừng kinh doanh
+          </p>
         </div>
 
         <div className="rounded-xl border border-[#e9e1da] bg-white p-5">
@@ -228,21 +265,25 @@ export default function AdminProducts() {
         </div>
 
         <div className="rounded-xl border border-[#e9e1da] bg-white p-5">
-          <p className="text-sm text-[#8b8178]">Sản phẩm hết hàng</p>
-          <p className="mt-2 text-2xl font-semibold text-red-600">
-            {outOfStock}
+          <p className="text-sm text-[#8b8178]">Sản phẩm cần bổ sung kho</p>
+          <p className="mt-2 text-2xl font-semibold text-amber-700">
+            {statusCounts["Sắp hết hàng"] + statusCounts["Hết hàng"]}
+          </p>
+          <p className="mt-1 text-xs text-[#8b8178]">
+            {statusCounts["Hết hàng"]} sản phẩm hết hàng
           </p>
         </div>
       </div>
 
+      {/* Bộ lọc */}
       <div className="rounded-xl border border-[#e9e1da] bg-white p-4 sm:p-5">
-        <div className="flex flex-col gap-3 md:flex-row">
-          <div className="relative flex-1">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="md:col-span-1">
             <input
               type="search"
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
-              placeholder="Tìm theo tên, mã hoặc danh mục phụ..."
+              placeholder="Tìm theo tên, mã hoặc danh mục..."
               className="min-h-11 w-full rounded-lg border border-[#e3dbd4] bg-[#fdfcfb] px-4 text-sm outline-none transition focus:border-[#5a493d]"
             />
           </div>
@@ -259,24 +300,34 @@ export default function AdminProducts() {
               </option>
             ))}
           </select>
+
+          <select
+            value={stockStatus}
+            onChange={(event) => setStockStatus(event.target.value)}
+            className="min-h-11 rounded-lg border border-[#e3dbd4] bg-[#fdfcfb] px-4 text-sm outline-none focus:border-[#5a493d]"
+          >
+            <option value="Tất cả">Tất cả trạng thái</option>
+            {STATUS_OPTIONS.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
         </div>
 
-        <div className="mt-4 flex items-center justify-between gap-3">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-[#8b8178]">
             Tìm thấy{" "}
             <strong className="text-[#2d261f]">
               {filteredProducts.length}
             </strong>{" "}
-            sản phẩm
+            / {totalProducts} sản phẩm
           </p>
 
-          {(keyword || category !== "Tất cả") && (
+          {hasActiveFilters && (
             <button
               type="button"
-              onClick={() => {
-                setKeyword("");
-                setCategory("Tất cả");
-              }}
+              onClick={clearFilters}
               className="text-sm font-medium text-[#5a493d] underline underline-offset-4"
             >
               Xóa bộ lọc
@@ -284,6 +335,7 @@ export default function AdminProducts() {
           )}
         </div>
 
+        {/* Bảng sản phẩm */}
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[1050px] border-collapse text-left text-sm">
             <thead>
@@ -300,7 +352,8 @@ export default function AdminProducts() {
             <tbody>
               {filteredProducts.map((product) => {
                 const stock = getProductStock(product, stockMap);
-                const image = product.images[0];
+                const status = getProductStatus(product, stockMap);
+                const image = product.images?.[0];
 
                 return (
                   <tr
@@ -346,23 +399,25 @@ export default function AdminProducts() {
 
                     <td className="px-4 py-4">
                       <span
-                        className={stock <= 0 ? "font-medium text-red-600" : ""}
+                        className={
+                          stock <= 0
+                            ? "font-medium text-red-600"
+                            : stock <= LOW_STOCK_THRESHOLD
+                              ? "font-medium text-amber-700"
+                              : ""
+                        }
                       >
-                        {stock}
+                        {stock.toLocaleString("vi-VN")}
                       </span>
                       <span className="ml-1 text-xs text-[#8b8178]">sp</span>
                     </td>
 
                     <td className="px-4 py-4">
-                      {stock > 0 ? (
-                        <span className="inline-flex rounded-full bg-green-50 px-3 py-1 text-xs font-medium text-green-700">
-                          Còn hàng
-                        </span>
-                      ) : (
-                        <span className="inline-flex rounded-full bg-red-50 px-3 py-1 text-xs font-medium text-red-700">
-                          Hết hàng
-                        </span>
-                      )}
+                      <span
+                        className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${getStatusClass(status)}`}
+                      >
+                        {status}
+                      </span>
                     </td>
 
                     <td className="px-4 py-4">
@@ -375,22 +430,26 @@ export default function AdminProducts() {
                           Sửa
                         </button>
 
-                        {stock > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => handleMarkOutOfStock(product)}
-                            className="whitespace-nowrap rounded-md border border-amber-200 px-3 py-2 text-xs font-medium text-amber-700 transition hover:bg-amber-50"
-                          >
-                            Hết hàng
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => setStockProduct(product)}
+                          className="whitespace-nowrap rounded-md border border-[#ddd2c8] px-3 py-2 text-xs font-medium text-[#5a493d] transition hover:bg-[#f7f1ed]"
+                        >
+                          Quản lý kho
+                        </button>
 
                         <button
                           type="button"
-                          onClick={() => handleDelete(product)}
-                          className="rounded-md border border-red-200 px-3 py-2 text-xs font-medium text-red-600 transition hover:bg-red-50"
+                          onClick={() => handleToggleDiscontinued(product)}
+                          className={`whitespace-nowrap rounded-md border px-3 py-2 text-xs font-medium transition ${
+                            product.discontinued
+                              ? "border-green-200 text-green-700 hover:bg-green-50"
+                              : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                          }`}
                         >
-                          Xóa hẳn
+                          {product.discontinued
+                            ? "Khôi phục"
+                            : "Ngừng kinh doanh"}
                         </button>
                       </div>
                     </td>
@@ -403,7 +462,7 @@ export default function AdminProducts() {
                   <td colSpan={6} className="px-4 py-12 text-center">
                     <p className="font-medium">Không tìm thấy sản phẩm</p>
                     <p className="mt-1 text-sm text-[#8b8178]">
-                      Hãy thử từ khóa khác hoặc thay đổi danh mục.
+                      Hãy thử từ khóa khác hoặc thay đổi bộ lọc.
                     </p>
                   </td>
                 </tr>
@@ -424,6 +483,20 @@ export default function AdminProducts() {
               wasEditing ? "Đã cập nhật sản phẩm." : "Đã thêm sản phẩm mới.",
               "success",
             );
+          }}
+        />
+      )}
+
+      {stockProduct && (
+        <AdminProductStockModal
+          product={stockProduct}
+          stockMap={stockMap}
+          onClose={() => setStockProduct(null)}
+          onSaved={() => {
+            setStockProduct(null);
+            refreshProducts();
+            refreshStock();
+            toast("Đã cập nhật tồn kho sản phẩm.", "success");
           }}
         />
       )}
