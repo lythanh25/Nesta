@@ -1,12 +1,31 @@
 const USERS_KEY = "nesta-demo-users";
 const SESSION_KEY = "nesta-user-session";
 
+export type CustomerStatus = "active" | "inactive";
+
+export type CustomerDeactivationRecord = {
+  reason: string;
+  deactivatedAt: string;
+  reactivatedAt?: string;
+};
+
 export type Customer = {
   id: string;
   fullName: string;
   email: string;
   phone: string;
   password: string;
+
+  // Tài khoản cũ chưa có status được mặc định là active.
+  status?: CustomerStatus;
+
+  // Thông tin ngừng hoạt động gần nhất.
+  deactivationReason?: string;
+  deactivatedAt?: string;
+  lastReactivatedAt?: string;
+
+  // Lịch sử các lần ngừng hoạt động và kích hoạt lại.
+  deactivationHistory?: CustomerDeactivationRecord[];
 };
 
 export type CustomerSession = {
@@ -31,8 +50,17 @@ function readUsers(): Customer[] {
   }
 }
 
-function normalizeEmail(email: string) {
+function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+function isCustomerActive(customer: Customer): boolean {
+  // Tương thích với tài khoản được tạo trước khi bổ sung trạng thái.
+  return customer.status !== "inactive";
+}
+
+function findCustomerById(id: string): Customer | undefined {
+  return readUsers().find((user) => user.id === id);
 }
 
 export function registerCustomer(data: {
@@ -67,6 +95,8 @@ export function registerCustomer(data: {
     email,
     phone,
     password: data.password,
+    status: "active",
+    deactivationHistory: [],
   };
 
   try {
@@ -117,15 +147,20 @@ export function loginCustomer(
   password: string,
 ): AuthResult {
   const email = normalizeEmail(emailInput);
-  const user = readUsers().find(
-    (item) =>
-      normalizeEmail(item.email) === email && item.password === password,
-  );
+  const user = readUsers().find((item) => normalizeEmail(item.email) === email);
 
-  if (!user) {
+  if (!user || user.password !== password) {
     return {
       success: false,
       message: "Email hoặc mật khẩu không chính xác.",
+    };
+  }
+
+  if (!isCustomerActive(user)) {
+    return {
+      success: false,
+      message:
+        "Tài khoản của bạn hiện đang ngừng hoạt động. Vui lòng liên hệ bộ phận hỗ trợ để được giải đáp.",
     };
   }
 
@@ -162,7 +197,7 @@ export function loginCustomer(
   }
 }
 
-export function logoutCustomer() {
+export function logoutCustomer(): void {
   localStorage.removeItem(SESSION_KEY);
   window.dispatchEvent(new Event("customerAuthUpdated"));
 }
@@ -180,11 +215,26 @@ export function getCustomerSession(): CustomerSession["user"] | null {
       typeof parsed.user.email !== "string" ||
       typeof parsed.user.fullName !== "string"
     ) {
+      localStorage.removeItem(SESSION_KEY);
       return null;
     }
 
-    return parsed.user;
+    // Kiểm tra tài khoản vẫn tồn tại và còn hoạt động.
+    const customer = findCustomerById(parsed.user.id);
+
+    if (!customer || !isCustomerActive(customer)) {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+
+    // Đồng bộ thông tin mới nhất từ danh sách tài khoản.
+    return {
+      id: customer.id,
+      fullName: customer.fullName,
+      email: customer.email,
+    };
   } catch {
+    localStorage.removeItem(SESSION_KEY);
     return null;
   }
 }
@@ -219,10 +269,10 @@ export function changeCustomerPassword(
   const users = readUsers();
   const userIndex = users.findIndex((user) => user.id === session.id);
 
-  if (userIndex === -1) {
+  if (userIndex === -1 || !isCustomerActive(users[userIndex])) {
     return {
       success: false,
-      message: "Không tìm thấy tài khoản.",
+      message: "Tài khoản không tồn tại hoặc đã ngừng hoạt động.",
     };
   }
 
@@ -243,9 +293,7 @@ export function changeCustomerPassword(
 
     localStorage.setItem(USERS_KEY, JSON.stringify(updatedUsers));
 
-    return {
-      success: true,
-    };
+    return { success: true };
   } catch {
     return {
       success: false,
@@ -253,7 +301,6 @@ export function changeCustomerPassword(
     };
   }
 }
-
 
 export function updateCustomerProfile(data: {
   fullName: string;
@@ -283,17 +330,15 @@ export function updateCustomerProfile(data: {
   const users = readUsers();
   const userIndex = users.findIndex((user) => user.id === session.id);
 
-  if (userIndex === -1) {
+  if (userIndex === -1 || !isCustomerActive(users[userIndex])) {
     return {
       success: false,
-      message: "Không tìm thấy tài khoản.",
+      message: "Tài khoản không tồn tại hoặc đã ngừng hoạt động.",
     };
   }
 
   const emailExists = users.some(
-    (user) =>
-      user.id !== session.id &&
-      normalizeEmail(user.email) === email,
+    (user) => user.id !== session.id && normalizeEmail(user.email) === email,
   );
 
   if (emailExists) {

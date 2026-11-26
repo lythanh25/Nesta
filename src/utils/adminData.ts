@@ -60,7 +60,7 @@ export type AdminEmployee = {
   phone: string;
   position: string;
   department: string;
-  status: "Đang làm việc" | "Tạm nghỉ";
+  status: "Đang làm việc" | "Tạm nghỉ" | "Đã nghỉ việc";
   createdAt: string;
 };
 
