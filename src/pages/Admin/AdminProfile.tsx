@@ -424,7 +424,7 @@ function AdminProfile() {
             <p className="mt-2 text-xs leading-6 text-stone-500">
               Không chia sẻ thông tin đăng nhập quản trị với người khác. Hãy
               kiểm tra kỹ thông tin trước khi lưu để đảm bảo hồ sơ luôn chính
-              xác.
+              xác nhất.
             </p>
           </section>
         </aside>
