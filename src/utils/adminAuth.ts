@@ -7,24 +7,30 @@ const DEMO_ADMIN = {
   password: "Nesta@123",
 };
 
+// Nhận diện email Admin để chọn đúng luồng xác thực.
+export function isAdminAccountEmail(email: string): boolean {
+  return email.trim().toLowerCase() === DEMO_ADMIN.email;
+}
+
 export function loginAdmin(email: string, password: string): boolean {
-  if (
-    email.trim().toLowerCase() !== DEMO_ADMIN.email ||
-    password !== DEMO_ADMIN.password
-  ) {
+  if (!isAdminAccountEmail(email) || password !== DEMO_ADMIN.password) {
     return false;
   }
 
-  localStorage.setItem(
-    ADMIN_SESSION_KEY,
-    JSON.stringify({
-      email: DEMO_ADMIN.email,
-      role: "admin",
-      loggedInAt: new Date().toISOString(),
-    }),
-  );
+  try {
+    localStorage.setItem(
+      ADMIN_SESSION_KEY,
+      JSON.stringify({
+        email: DEMO_ADMIN.email,
+        role: "admin",
+        loggedInAt: new Date().toISOString(),
+      }),
+    );
 
-  return true;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function isAdminLoggedIn(): boolean {

@@ -104,14 +104,6 @@ const emptyAddress: AddressInfo = {
   address: "",
 };
 
-const menuItems: { id: SectionId; label: string }[] = [
-  { id: "personal", label: "Thông tin cá nhân" },
-  { id: "password", label: "Đổi mật khẩu" },
-  { id: "address", label: "Địa chỉ" },
-  { id: "favorites", label: "Yêu thích" },
-  { id: "orders", label: "Đơn hàng" },
-];
-
 function readStorage<T>(key: string, fallback: T): T {
   try {
     const saved = localStorage.getItem(key);
@@ -271,7 +263,21 @@ function Profile() {
   const navigate = useNavigate();
   const session = getCustomerSession();
 
-  const [activeSection, setActiveSection] = useState<SectionId>("personal");
+  const [activeSection, setActiveSection] = useState<SectionId>(() => {
+    const section = window.location.hash.replace("#", "");
+    const validSections: SectionId[] = [
+      "personal",
+      "password",
+      "address",
+      "favorites",
+      "orders",
+    ];
+    return validSections.includes(section as SectionId)
+      ? (section as SectionId)
+      : "personal";
+  });
+  const [accountMenuOpen, setAccountMenuOpen] = useState(true);
+  const [ordersMenuOpen, setOrdersMenuOpen] = useState(true);
 
   const [favoriteIds, setFavoriteIds] = useState<number[]>(() =>
     getFavoriteIds(),
@@ -377,57 +383,6 @@ function Profile() {
     };
   }, []);
 
-  // Tự động cập nhật mục đang được chọn khi người dùng cuộn trang.
-
-  useEffect(() => {
-    function updateActiveSection() {
-      const sectionElements = menuItems
-        .map((item) => document.getElementById(`profile-${item.id}`))
-        .filter((element): element is HTMLElement => element !== null);
-
-      if (sectionElements.length === 0) return;
-
-      // Nếu đã cuộn gần đến cuối trang,
-      // tự động chọn mục Đơn hàng.
-      const isNearBottom =
-        window.innerHeight + window.scrollY >=
-        document.documentElement.scrollHeight - 80;
-
-      if (isNearBottom) {
-        setActiveSection("orders");
-        return;
-      }
-
-      // Xác định section nằm gần vùng trên của màn hình.
-      const marker = window.scrollY + window.innerHeight * 0.3;
-
-      let currentSection: SectionId = "personal";
-
-      sectionElements.forEach((section) => {
-        const sectionTop = section.getBoundingClientRect().top + window.scrollY;
-
-        if (sectionTop <= marker) {
-          currentSection = section.id.replace("profile-", "") as SectionId;
-        }
-      });
-
-      setActiveSection(currentSection);
-    }
-
-    updateActiveSection();
-
-    window.addEventListener("scroll", updateActiveSection, {
-      passive: true,
-    });
-
-    window.addEventListener("resize", updateActiveSection);
-
-    return () => {
-      window.removeEventListener("scroll", updateActiveSection);
-      window.removeEventListener("resize", updateActiveSection);
-    };
-  }, []);
-
   const favoriteProducts = products.filter((product) =>
     favoriteIds.includes(product.id),
   );
@@ -454,13 +409,14 @@ function Profile() {
 
   function navigateToSection(section: SectionId) {
     setActiveSection(section);
-
-    window.history.replaceState(null, "", `#${section}`);
-
-    document.getElementById(`profile-${section}`)?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
+    setAccountMenuOpen(["personal", "password", "address"].includes(section));
+    setOrdersMenuOpen(["orders", "favorites"].includes(section));
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}#${section}`,
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function updateProfile(field: keyof ProfileInfo, value: string) {
@@ -757,40 +713,112 @@ function Profile() {
           {/* SIDEBAR */}
 
           <aside className="h-fit border border-[#e1d7ce] bg-[#f1e9e2] p-4 md:sticky md:top-24 md:p-5">
-            <h2 className="mb-4 border-b border-[#d8ccc1] pb-3 text-xs font-semibold uppercase tracking-wide text-[#2d261f]">
-              Tài khoản cá nhân
-            </h2>
+            <div className="mb-4 border-b border-[#d8ccc1] pb-4">
+              <p className="text-[10px] tracking-[0.16em] text-[#9a8878]">
+                XIN CHÀO
+              </p>
+              <h2 className="mt-1 break-words text-sm font-semibold text-[#2d261f]">
+                {profile.fullName || session.fullName}
+              </h2>
+              <p className="mt-1 break-all text-[10px] text-[#756b63]">
+                {session.email}
+              </p>
+            </div>
 
-            <nav className="flex flex-col gap-1">
-              {menuItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => navigateToSection(item.id)}
-                  className={`border-l-2 px-3 py-2.5 text-left text-xs transition ${
-                    activeSection === item.id
-                      ? "border-[#3b2f25] bg-[#3b2f25] font-medium text-white"
-                      : "border-transparent text-[#51463d] hover:border-[#9c8877] hover:bg-[#e8ddd3]"
-                  }`}
+            <nav
+              aria-label="Điều hướng tài khoản"
+              className="flex flex-col gap-1"
+            >
+              <button
+                type="button"
+                aria-expanded={accountMenuOpen}
+                onClick={() => setAccountMenuOpen((open) => !open)}
+                className="flex w-full items-center justify-between px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[#3b2f25] transition hover:bg-[#e8ddd3]"
+              >
+                <span>Tài khoản cá nhân</span>
+                <span
+                  className={`text-sm transition-transform ${accountMenuOpen ? "rotate-180" : ""}`}
                 >
-                  <span>{item.label}</span>
+                  ⌄
+                </span>
+              </button>
 
-                  {item.id === "favorites" && (
-                    <span className="ml-2 opacity-75">
-                      ({favoriteProducts.length})
-                    </span>
-                  )}
+              {accountMenuOpen && (
+                <div className="ml-2 flex flex-col gap-1 border-l border-[#d8ccc1] pl-2">
+                  {(
+                    [
+                      ["personal", "Thông tin cá nhân"],
+                      ["password", "Đổi mật khẩu"],
+                      ["address", "Địa chỉ giao hàng"],
+                    ] as [SectionId, string][]
+                  ).map(([id, label]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => navigateToSection(id)}
+                      aria-current={activeSection === id ? "page" : undefined}
+                      className={`border-l-2 px-3 py-2.5 text-left text-xs transition ${
+                        activeSection === id
+                          ? "-ml-px border-[#3b2f25] bg-[#3b2f25] font-medium text-white"
+                          : "border-transparent text-[#51463d] hover:bg-[#e8ddd3]"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-                  {item.id === "orders" && (
-                    <span className="ml-2 opacity-75">({orders.length})</span>
-                  )}
-                </button>
-              ))}
+              <div className="my-2 border-t border-[#d8ccc1]" />
+
+              <button
+                type="button"
+                aria-expanded={ordersMenuOpen}
+                onClick={() => setOrdersMenuOpen((open) => !open)}
+                className="flex w-full items-center justify-between px-3 py-3 text-left text-[11px] font-semibold uppercase tracking-wide text-[#3b2f25] transition hover:bg-[#e8ddd3]"
+              >
+                <span>Đơn hàng & yêu thích</span>
+                <span
+                  className={`text-sm transition-transform ${ordersMenuOpen ? "rotate-180" : ""}`}
+                >
+                  ⌄
+                </span>
+              </button>
+
+              {ordersMenuOpen && (
+                <div className="ml-2 flex flex-col gap-1 border-l border-[#d8ccc1] pl-2">
+                  {(
+                    [
+                      ["orders", "Đơn hàng", orders.length],
+                      [
+                        "favorites",
+                        "Sản phẩm yêu thích",
+                        favoriteProducts.length,
+                      ],
+                    ] as [SectionId, string, number][]
+                  ).map(([id, label, count]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => navigateToSection(id)}
+                      aria-current={activeSection === id ? "page" : undefined}
+                      className={`flex items-center justify-between gap-2 border-l-2 px-3 py-2.5 text-left text-xs transition ${
+                        activeSection === id
+                          ? "-ml-px border-[#3b2f25] bg-[#3b2f25] font-medium text-white"
+                          : "border-transparent text-[#51463d] hover:bg-[#e8ddd3]"
+                      }`}
+                    >
+                      <span>{label}</span>
+                      <span className="text-[10px] opacity-75">{count}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <button
                 type="button"
                 onClick={handleLogout}
-                className="mt-2 border-l-2 border-transparent px-3 py-2.5 text-left text-xs text-red-700 transition hover:bg-red-50"
+                className="mt-3 border-l-2 border-transparent px-3 py-2.5 text-left text-xs text-red-700 transition hover:bg-red-50"
               >
                 Đăng xuất
               </button>
@@ -799,643 +827,665 @@ function Profile() {
 
           {/* KHU VỰC NỘI DUNG */}
 
-          <div className="min-w-0 space-y-7">
+          <div className="min-w-0">
+            <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-[10px] tracking-[0.16em] text-[#9a8878]">
+                  QUẢN LÝ TÀI KHOẢN
+                </p>
+                <h2 className="mt-1 font-serif text-xl font-semibold text-[#2d261f]">
+                  {
+                    {
+                      personal: "Thông tin cá nhân",
+                      password: "Đổi mật khẩu",
+                      address: "Địa chỉ giao hàng",
+                      orders: "Đơn hàng của tôi",
+                      favorites: "Sản phẩm yêu thích",
+                    }[activeSection]
+                  }
+                </h2>
+              </div>
+              <span className="text-[10px] text-[#8c7a69]">
+                NESTA FURNITURE
+              </span>
+            </div>
             {/* THÔNG TIN CÁ NHÂN */}
 
-            <section
-              id="profile-personal"
-              className="scroll-mt-28 border border-[#ddd5cd] bg-white p-5 md:p-7"
-            >
-              <h2 className="border-b border-[#e5ddd6] pb-3 text-sm font-semibold text-[#2d261f]">
-                THÔNG TIN CÁ NHÂN
-              </h2>
+            {activeSection === "personal" && (
+              <section className="border border-[#ddd5cd] bg-white p-5 md:p-7">
+                <h2 className="border-b border-[#e5ddd6] pb-3 text-sm font-semibold text-[#2d261f]">
+                  THÔNG TIN CÁ NHÂN
+                </h2>
 
-              <form onSubmit={saveProfile} className="mt-5">
-                <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
-                  <div>
-                    <label className={labelClass} htmlFor="fullName">
-                      Họ và tên *
-                    </label>
-                    <input
-                      id="fullName"
-                      required
-                      autoComplete="name"
-                      value={profile.fullName}
-                      onChange={(event) =>
-                        updateProfile("fullName", event.target.value)
-                      }
-                      placeholder="Nhập họ và tên"
-                      className={inputClass}
-                    />
+                <form onSubmit={saveProfile} className="mt-5">
+                  <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2">
+                    <div>
+                      <label className={labelClass} htmlFor="fullName">
+                        Họ và tên *
+                      </label>
+                      <input
+                        id="fullName"
+                        required
+                        autoComplete="name"
+                        value={profile.fullName}
+                        onChange={(event) =>
+                          updateProfile("fullName", event.target.value)
+                        }
+                        placeholder="Nhập họ và tên"
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelClass} htmlFor="email">
+                        Email *
+                      </label>
+                      <input
+                        id="email"
+                        required
+                        type="email"
+                        autoComplete="email"
+                        value={profile.email}
+                        onChange={(event) =>
+                          updateProfile("email", event.target.value)
+                        }
+                        placeholder="Nhập email"
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelClass} htmlFor="phone">
+                        Số điện thoại
+                      </label>
+                      <input
+                        id="phone"
+                        type="tel"
+                        autoComplete="tel"
+                        value={profile.phone}
+                        onChange={(event) =>
+                          updateProfile("phone", event.target.value)
+                        }
+                        placeholder="Nhập số điện thoại"
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelClass} htmlFor="birthday">
+                        Ngày sinh
+                      </label>
+                      <input
+                        id="birthday"
+                        type="date"
+                        value={profile.birthday}
+                        onChange={(event) =>
+                          updateProfile("birthday", event.target.value)
+                        }
+                        className={inputClass}
+                      />
+                    </div>
                   </div>
 
-                  <div>
-                    <label className={labelClass} htmlFor="email">
-                      Email *
-                    </label>
-                    <input
-                      id="email"
-                      required
-                      type="email"
-                      autoComplete="email"
-                      value={profile.email}
-                      onChange={(event) =>
-                        updateProfile("email", event.target.value)
-                      }
-                      placeholder="Nhập email"
-                      className={inputClass}
-                    />
-                  </div>
-
-                  <div>
-                    <label className={labelClass} htmlFor="phone">
-                      Số điện thoại
-                    </label>
-                    <input
-                      id="phone"
-                      type="tel"
-                      autoComplete="tel"
-                      value={profile.phone}
-                      onChange={(event) =>
-                        updateProfile("phone", event.target.value)
-                      }
-                      placeholder="Nhập số điện thoại"
-                      className={inputClass}
-                    />
-                  </div>
-
-                  <div>
-                    <label className={labelClass} htmlFor="birthday">
-                      Ngày sinh
-                    </label>
-                    <input
-                      id="birthday"
-                      type="date"
-                      value={profile.birthday}
-                      onChange={(event) =>
-                        updateProfile("birthday", event.target.value)
-                      }
-                      className={inputClass}
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  className="mt-5 bg-[#3b2f25] px-6 py-3 text-[10px] font-medium tracking-wide text-white transition hover:bg-[#594638]"
-                >
-                  LƯU THAY ĐỔI
-                </button>
-              </form>
-            </section>
+                  <button
+                    type="submit"
+                    className="mt-5 bg-[#3b2f25] px-6 py-3 text-[10px] font-medium tracking-wide text-white transition hover:bg-[#594638]"
+                  >
+                    LƯU THAY ĐỔI
+                  </button>
+                </form>
+              </section>
+            )}
 
             {/* ĐỔI MẬT KHẨU */}
 
-            <section
-              id="profile-password"
-              className="scroll-mt-28 border border-[#ddd5cd] bg-white p-5 md:p-7"
-            >
-              <h2 className="border-b border-[#e5ddd6] pb-3 text-sm font-semibold text-[#2d261f]">
-                THAY ĐỔI MẬT KHẨU
-              </h2>
+            {activeSection === "password" && (
+              <section className="border border-[#ddd5cd] bg-white p-5 md:p-7">
+                <h2 className="border-b border-[#e5ddd6] pb-3 text-sm font-semibold text-[#2d261f]">
+                  THAY ĐỔI MẬT KHẨU
+                </h2>
 
-              <form
-                onSubmit={changePassword}
-                className="mt-5 max-w-xl space-y-4"
-              >
-                <div>
-                  <label className={labelClass} htmlFor="currentPassword">
-                    Mật khẩu hiện tại
-                  </label>
-                  <input
-                    id="currentPassword"
-                    type="password"
-                    autoComplete="current-password"
-                    value={currentPassword}
-                    onChange={(event) => setCurrentPassword(event.target.value)}
-                    placeholder="Nhập mật khẩu hiện tại"
-                    className={inputClass}
-                  />
-                </div>
-
-                <div>
-                  <label className={labelClass} htmlFor="newPassword">
-                    Mật khẩu mới
-                  </label>
-                  <input
-                    id="newPassword"
-                    type="password"
-                    autoComplete="new-password"
-                    value={newPassword}
-                    onChange={(event) => setNewPassword(event.target.value)}
-                    placeholder="Tối thiểu 8 ký tự"
-                    className={inputClass}
-                  />
-                </div>
-
-                <div>
-                  <label className={labelClass} htmlFor="confirmPassword">
-                    Xác nhận mật khẩu mới
-                  </label>
-                  <input
-                    id="confirmPassword"
-                    type="password"
-                    autoComplete="new-password"
-                    value={confirmPassword}
-                    onChange={(event) => setConfirmPassword(event.target.value)}
-                    placeholder="Nhập lại mật khẩu mới"
-                    className={inputClass}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="bg-[#3b2f25] px-6 py-3 text-[10px] font-medium tracking-wide text-white transition hover:bg-[#594638]"
+                <form
+                  onSubmit={changePassword}
+                  className="mt-5 max-w-xl space-y-4"
                 >
-                  CẬP NHẬT MẬT KHẨU
-                </button>
-              </form>
-            </section>
+                  <div>
+                    <label className={labelClass} htmlFor="currentPassword">
+                      Mật khẩu hiện tại
+                    </label>
+                    <input
+                      id="currentPassword"
+                      type="password"
+                      autoComplete="current-password"
+                      value={currentPassword}
+                      onChange={(event) =>
+                        setCurrentPassword(event.target.value)
+                      }
+                      placeholder="Nhập mật khẩu hiện tại"
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelClass} htmlFor="newPassword">
+                      Mật khẩu mới
+                    </label>
+                    <input
+                      id="newPassword"
+                      type="password"
+                      autoComplete="new-password"
+                      value={newPassword}
+                      onChange={(event) => setNewPassword(event.target.value)}
+                      placeholder="Tối thiểu 8 ký tự"
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={labelClass} htmlFor="confirmPassword">
+                      Xác nhận mật khẩu mới
+                    </label>
+                    <input
+                      id="confirmPassword"
+                      type="password"
+                      autoComplete="new-password"
+                      value={confirmPassword}
+                      onChange={(event) =>
+                        setConfirmPassword(event.target.value)
+                      }
+                      placeholder="Nhập lại mật khẩu mới"
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="bg-[#3b2f25] px-6 py-3 text-[10px] font-medium tracking-wide text-white transition hover:bg-[#594638]"
+                  >
+                    CẬP NHẬT MẬT KHẨU
+                  </button>
+                </form>
+              </section>
+            )}
 
             {/* ĐỊA CHỈ GIAO HÀNG */}
 
-            <section
-              id="profile-address"
-              className="scroll-mt-28 border border-[#ddd5cd] bg-white p-5 md:p-7"
-            >
-              <h2 className="border-b border-[#e5ddd6] pb-3 text-sm font-semibold text-[#2d261f]">
-                ĐỊA CHỈ GIAO HÀNG
-              </h2>
+            {activeSection === "address" && (
+              <section className="border border-[#ddd5cd] bg-white p-5 md:p-7">
+                <h2 className="border-b border-[#e5ddd6] pb-3 text-sm font-semibold text-[#2d261f]">
+                  ĐỊA CHỈ GIAO HÀNG
+                </h2>
 
-              <form onSubmit={saveAddress} className="mt-5">
-                <div className="space-y-4">
-                  <div>
-                    <label className={labelClass} htmlFor="recipient">
-                      Họ và tên người nhận *
-                    </label>
-                    <input
-                      id="recipient"
-                      required
-                      autoComplete="shipping name"
-                      value={address.recipient}
-                      onChange={(event) =>
-                        updateAddress("recipient", event.target.value)
-                      }
-                      placeholder="Nhập họ và tên người nhận"
-                      className={inputClass}
-                    />
-                  </div>
-
-                  <div>
-                    <label className={labelClass} htmlFor="addressPhone">
-                      Số điện thoại *
-                    </label>
-                    <input
-                      id="addressPhone"
-                      required
-                      type="tel"
-                      autoComplete="shipping tel"
-                      value={address.phone}
-                      onChange={(event) =>
-                        updateAddress("phone", event.target.value)
-                      }
-                      placeholder="Nhập số điện thoại nhận hàng"
-                      className={inputClass}
-                    />
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
+                <form onSubmit={saveAddress} className="mt-5">
+                  <div className="space-y-4">
                     <div>
-                      <label className={labelClass} htmlFor="city">
-                        Tỉnh/Thành phố *
+                      <label className={labelClass} htmlFor="recipient">
+                        Họ và tên người nhận *
                       </label>
                       <input
-                        id="city"
+                        id="recipient"
                         required
-                        autoComplete="shipping address-level1"
-                        value={address.city}
+                        autoComplete="shipping name"
+                        value={address.recipient}
                         onChange={(event) =>
-                          updateAddress("city", event.target.value)
+                          updateAddress("recipient", event.target.value)
                         }
-                        placeholder="Nhập tỉnh/thành phố"
+                        placeholder="Nhập họ và tên người nhận"
                         className={inputClass}
                       />
                     </div>
 
                     <div>
-                      <label className={labelClass} htmlFor="district">
-                        Quận/Huyện *
+                      <label className={labelClass} htmlFor="addressPhone">
+                        Số điện thoại *
                       </label>
                       <input
-                        id="district"
+                        id="addressPhone"
                         required
-                        autoComplete="shipping address-level2"
-                        value={address.district}
+                        type="tel"
+                        autoComplete="shipping tel"
+                        value={address.phone}
                         onChange={(event) =>
-                          updateAddress("district", event.target.value)
+                          updateAddress("phone", event.target.value)
                         }
-                        placeholder="Nhập quận/huyện"
+                        placeholder="Nhập số điện thoại nhận hàng"
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className={labelClass} htmlFor="city">
+                          Tỉnh/Thành phố *
+                        </label>
+                        <input
+                          id="city"
+                          required
+                          autoComplete="shipping address-level1"
+                          value={address.city}
+                          onChange={(event) =>
+                            updateAddress("city", event.target.value)
+                          }
+                          placeholder="Nhập tỉnh/thành phố"
+                          className={inputClass}
+                        />
+                      </div>
+
+                      <div>
+                        <label className={labelClass} htmlFor="district">
+                          Quận/Huyện *
+                        </label>
+                        <input
+                          id="district"
+                          required
+                          autoComplete="shipping address-level2"
+                          value={address.district}
+                          onChange={(event) =>
+                            updateAddress("district", event.target.value)
+                          }
+                          placeholder="Nhập quận/huyện"
+                          className={inputClass}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className={labelClass} htmlFor="ward">
+                        Phường/Xã
+                      </label>
+                      <input
+                        id="ward"
+                        autoComplete="shipping address-level3"
+                        value={address.ward}
+                        onChange={(event) =>
+                          updateAddress("ward", event.target.value)
+                        }
+                        placeholder="Nhập phường/xã"
+                        className={inputClass}
+                      />
+                    </div>
+
+                    <div>
+                      <label className={labelClass} htmlFor="address">
+                        Địa chỉ cụ thể *
+                      </label>
+                      <input
+                        id="address"
+                        required
+                        autoComplete="shipping street-address"
+                        value={address.address}
+                        onChange={(event) =>
+                          updateAddress("address", event.target.value)
+                        }
+                        placeholder="Số nhà, tên đường..."
                         className={inputClass}
                       />
                     </div>
                   </div>
 
-                  <div>
-                    <label className={labelClass} htmlFor="ward">
-                      Phường/Xã
-                    </label>
-                    <input
-                      id="ward"
-                      autoComplete="shipping address-level3"
-                      value={address.ward}
-                      onChange={(event) =>
-                        updateAddress("ward", event.target.value)
-                      }
-                      placeholder="Nhập phường/xã"
-                      className={inputClass}
-                    />
-                  </div>
-
-                  <div>
-                    <label className={labelClass} htmlFor="address">
-                      Địa chỉ cụ thể *
-                    </label>
-                    <input
-                      id="address"
-                      required
-                      autoComplete="shipping street-address"
-                      value={address.address}
-                      onChange={(event) =>
-                        updateAddress("address", event.target.value)
-                      }
-                      placeholder="Số nhà, tên đường..."
-                      className={inputClass}
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  className="mt-5 bg-[#3b2f25] px-6 py-3 text-[10px] font-medium tracking-wide text-white transition hover:bg-[#594638]"
-                >
-                  CẬP NHẬT ĐỊA CHỈ
-                </button>
-              </form>
-            </section>
+                  <button
+                    type="submit"
+                    className="mt-5 bg-[#3b2f25] px-6 py-3 text-[10px] font-medium tracking-wide text-white transition hover:bg-[#594638]"
+                  >
+                    CẬP NHẬT ĐỊA CHỈ
+                  </button>
+                </form>
+              </section>
+            )}
 
             {/* SẢN PHẨM YÊU THÍCH */}
 
-            <section
-              id="profile-favorites"
-              className="scroll-mt-28 border border-[#ddd5cd] bg-white p-5 md:p-7"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e5ddd6] pb-3">
-                <h2 className="text-sm font-semibold text-[#2d261f]">
-                  SẢN PHẨM YÊU THÍCH
-                </h2>
+            {activeSection === "favorites" && (
+              <section className="border border-[#ddd5cd] bg-white p-5 md:p-7">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e5ddd6] pb-3">
+                  <h2 className="text-sm font-semibold text-[#2d261f]">
+                    SẢN PHẨM YÊU THÍCH
+                  </h2>
 
-                <span className="text-[10px] text-[#756b63]">
-                  {favoriteProducts.length} sản phẩm
-                </span>
-              </div>
-
-              {favoriteProducts.length === 0 ? (
-                <div className="py-10 text-center">
-                  <div className="text-3xl text-[#a99a8d]">♡</div>
-
-                  <p className="mt-3 text-sm font-medium text-[#2d261f]">
-                    Bạn chưa có sản phẩm yêu thích
-                  </p>
-
-                  <p className="mt-2 text-xs leading-5 text-[#756b63]">
-                    Nhấn biểu tượng trái tim ở sản phẩm để lưu lại những món nội
-                    thất bạn quan tâm.
-                  </p>
-
-                  <Link
-                    to="/products"
-                    className="mt-5 inline-flex bg-[#3b2f25] px-6 py-3 text-[10px] font-medium tracking-wide text-white transition hover:bg-[#594638]"
-                  >
-                    KHÁM PHÁ SẢN PHẨM
-                  </Link>
+                  <span className="text-[10px] text-[#756b63]">
+                    {favoriteProducts.length} sản phẩm
+                  </span>
                 </div>
-              ) : (
-                <>
-                  <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                    {favoriteProducts.map((product) => (
-                      <article
-                        key={product.id}
-                        className="group relative min-w-0 overflow-hidden border border-[#e3dad2] bg-white"
-                      >
-                        <Link
-                          to={`/products/${product.id}`}
-                          className="block aspect-square overflow-hidden bg-[#f3eee9]"
-                        >
-                          <img
-                            src={product.images[0]}
-                            alt={product.name}
-                            loading="lazy"
-                            className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
-                          />
-                        </Link>
 
-                        <button
-                          type="button"
-                          onClick={() => removeFavorite(product.id)}
-                          aria-label={`Bỏ yêu thích ${product.name}`}
-                          title="Bỏ yêu thích"
-                          className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-lg text-red-600 transition hover:bg-red-50"
-                        >
-                          ♥
-                        </button>
+                {favoriteProducts.length === 0 ? (
+                  <div className="py-10 text-center">
+                    <div className="text-3xl text-[#a99a8d]">♡</div>
 
-                        <div className="p-3">
-                          <Link
-                            to={`/products/${product.id}`}
-                            className="line-clamp-2 min-h-8 text-xs font-medium leading-4 text-[#2d261f] hover:text-[#8c6c51]"
-                          >
-                            {product.name}
-                          </Link>
+                    <p className="mt-3 text-sm font-medium text-[#2d261f]">
+                      Bạn chưa có sản phẩm yêu thích
+                    </p>
 
-                          <p className="mt-2 text-[11px] font-semibold text-[#3b2f25]">
-                            {formatPrice(product.price)} VNĐ
-                          </p>
+                    <p className="mt-2 text-xs leading-5 text-[#756b63]">
+                      Nhấn biểu tượng trái tim ở sản phẩm để lưu lại những món
+                      nội thất bạn quan tâm.
+                    </p>
 
-                          <Link
-                            to={`/products/${product.id}`}
-                            className="mt-3 flex min-h-8 items-center justify-center border border-[#3b2f25] px-2 text-center text-[9px] font-medium tracking-wide text-[#3b2f25] transition hover:bg-[#3b2f25] hover:text-white"
-                          >
-                            XEM SẢN PHẨM
-                          </Link>
-                        </div>
-                      </article>
-                    ))}
+                    <Link
+                      to="/products"
+                      className="mt-5 inline-flex bg-[#3b2f25] px-6 py-3 text-[10px] font-medium tracking-wide text-white transition hover:bg-[#594638]"
+                    >
+                      KHÁM PHÁ SẢN PHẨM
+                    </Link>
                   </div>
+                ) : (
+                  <>
+                    <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                      {favoriteProducts.map((product) => (
+                        <article
+                          key={product.id}
+                          className="group relative min-w-0 overflow-hidden border border-[#e3dad2] bg-white"
+                        >
+                          <Link
+                            to={`/products/${product.id}`}
+                            className="block aspect-square overflow-hidden bg-[#f3eee9]"
+                          >
+                            <img
+                              src={product.images[0]}
+                              alt={product.name}
+                              loading="lazy"
+                              className="h-full w-full object-cover transition duration-300 group-hover:scale-[1.03]"
+                            />
+                          </Link>
 
-                  <Link
-                    to="/products"
-                    className="mt-5 inline-flex border border-[#3b2f25] px-5 py-2.5 text-[10px] font-medium text-[#3b2f25] transition hover:bg-[#3b2f25] hover:text-white"
-                  >
-                    TIẾP TỤC KHÁM PHÁ
-                  </Link>
-                </>
-              )}
-            </section>
+                          <button
+                            type="button"
+                            onClick={() => removeFavorite(product.id)}
+                            aria-label={`Bỏ yêu thích ${product.name}`}
+                            title="Bỏ yêu thích"
+                            className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-lg text-red-600 transition hover:bg-red-50"
+                          >
+                            ♥
+                          </button>
+
+                          <div className="p-3">
+                            <Link
+                              to={`/products/${product.id}`}
+                              className="line-clamp-2 min-h-8 text-xs font-medium leading-4 text-[#2d261f] hover:text-[#8c6c51]"
+                            >
+                              {product.name}
+                            </Link>
+
+                            <p className="mt-2 text-[11px] font-semibold text-[#3b2f25]">
+                              {formatPrice(product.price)} VNĐ
+                            </p>
+
+                            <Link
+                              to={`/products/${product.id}`}
+                              className="mt-3 flex min-h-8 items-center justify-center border border-[#3b2f25] px-2 text-center text-[9px] font-medium tracking-wide text-[#3b2f25] transition hover:bg-[#3b2f25] hover:text-white"
+                            >
+                              XEM SẢN PHẨM
+                            </Link>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+
+                    <Link
+                      to="/products"
+                      className="mt-5 inline-flex border border-[#3b2f25] px-5 py-2.5 text-[10px] font-medium text-[#3b2f25] transition hover:bg-[#3b2f25] hover:text-white"
+                    >
+                      TIẾP TỤC KHÁM PHÁ
+                    </Link>
+                  </>
+                )}
+              </section>
+            )}
 
             {/* ĐƠN HÀNG */}
 
-            <section
-              id="profile-orders"
-              className="scroll-mt-28 border border-[#ddd5cd] bg-white p-5 md:p-7"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e5ddd6] pb-3">
-                <h2 className="text-sm font-semibold text-[#2d261f]">
-                  ĐƠN HÀNG CỦA TÔI
-                </h2>
+            {activeSection === "orders" && (
+              <section className="border border-[#ddd5cd] bg-white p-5 md:p-7">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e5ddd6] pb-3">
+                  <h2 className="text-sm font-semibold text-[#2d261f]">
+                    ĐƠN HÀNG CỦA TÔI
+                  </h2>
 
-                <span className="text-[10px] text-[#756b63]">
-                  {orders.length} đơn hàng
-                </span>
-              </div>
+                  <span className="text-[10px] text-[#756b63]">
+                    {orders.length} đơn hàng
+                  </span>
+                </div>
 
-              {/* BỘ LỌC TRẠNG THÁI ĐƠN HÀNG */}
+                {/* BỘ LỌC TRẠNG THÁI ĐƠN HÀNG */}
 
-              <div className="mt-5 overflow-x-auto pb-2">
-                <div className="flex min-w-max gap-2">
-                  {ORDER_STATUS_TABS.map((status) => {
-                    const isActive = activeOrderStatus === status;
-                    const count = orderStatusCounts[status];
+                <div className="mt-5 overflow-x-auto pb-2">
+                  <div className="flex min-w-max gap-2">
+                    {ORDER_STATUS_TABS.map((status) => {
+                      const isActive = activeOrderStatus === status;
+                      const count = orderStatusCounts[status];
 
-                    return (
-                      <button
-                        key={status}
-                        type="button"
-                        onClick={() => setActiveOrderStatus(status)}
-                        className={`flex min-w-[140px] items-center justify-center gap-2 border px-4 py-3 text-[10px] font-medium transition ${
-                          isActive
-                            ? "border-[#3b2f25] bg-[#3b2f25] text-white"
-                            : "border-[#e3dad2] bg-[#faf8f6] text-[#6e5a47] hover:border-[#9c8877] hover:bg-[#f1e9e2]"
-                        }`}
-                      >
-                        <span>{status}</span>
-
-                        <span
-                          className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[9px] font-semibold ${
+                      return (
+                        <button
+                          key={status}
+                          type="button"
+                          onClick={() => setActiveOrderStatus(status)}
+                          className={`flex min-w-[140px] items-center justify-center gap-2 border px-4 py-3 text-[10px] font-medium transition ${
                             isActive
-                              ? "bg-white text-[#3b2f25]"
-                              : "bg-[#e8ddd3] text-[#51463d]"
+                              ? "border-[#3b2f25] bg-[#3b2f25] text-white"
+                              : "border-[#e3dad2] bg-[#faf8f6] text-[#6e5a47] hover:border-[#9c8877] hover:bg-[#f1e9e2]"
                           }`}
                         >
-                          {count}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+                          <span>{status}</span>
 
-              {orders.length === 0 ? (
-                <div className="py-10 text-center">
-                  <div className="text-3xl text-[#a99a8d]">▤</div>
-
-                  <p className="mt-3 text-sm font-medium text-[#2d261f]">
-                    Bạn chưa có đơn hàng nào
-                  </p>
-
-                  <p className="mt-2 text-xs leading-5 text-[#756b63]">
-                    Những đơn hàng đã đặt sẽ hiển thị tại đây.
-                  </p>
-
-                  <Link
-                    to="/products"
-                    className="mt-5 inline-flex bg-[#3b2f25] px-6 py-3 text-[10px] font-medium tracking-wide text-white transition hover:bg-[#594638]"
-                  >
-                    MUA SẮM NGAY
-                  </Link>
-                </div>
-              ) : filteredOrders.length === 0 ? (
-                <div className="py-12 text-center">
-                  <div className="text-3xl text-[#a99a8d]">▤</div>
-
-                  <p className="mt-3 text-sm font-medium text-[#2d261f]">
-                    Không có đơn hàng ở trạng thái này
-                  </p>
-
-                  <p className="mt-2 text-xs leading-5 text-[#756b63]">
-                    Các đơn hàng thuộc trạng thái "{activeOrderStatus}" sẽ hiển
-                    thị tại đây.
-                  </p>
-                </div>
-              ) : (
-                <div className="mt-5 space-y-5">
-                  {filteredOrders.map((order) => (
-                    <article
-                      key={order.id}
-                      className="border border-[#e3dad2] p-4 md:p-5"
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#e9e1da] pb-3">
-                        <div className="min-w-0">
-                          <p className="text-[10px] text-[#756b63]">
-                            Mã đơn hàng
-                          </p>
-
-                          <p className="mt-1 break-all text-xs font-semibold text-[#2d261f]">
-                            {order.id}
-                          </p>
-
-                          <p className="mt-1 text-[10px] text-[#756b63]">
-                            {formatDate(order.createdAt)}
-                          </p>
-                        </div>
-
-                        <div className="flex flex-wrap items-center justify-end gap-2">
                           <span
-                            className={`shrink-0 border px-2.5 py-1 text-[10px] ${getOrderStatusClass(order.status || "")}`}
+                            className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[9px] font-semibold ${
+                              isActive
+                                ? "bg-white text-[#3b2f25]"
+                                : "bg-[#e8ddd3] text-[#51463d]"
+                            }`}
                           >
-                            {getOrderStatusGroup(order.status || "")}
+                            {count}
                           </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-                          {canCancelOrder(order.status || "") && (
-                            <button
-                              type="button"
-                              onClick={() => handleCancelOrder(order.id)}
-                              className="border border-red-300 px-3 py-1.5 text-[10px] font-medium text-red-700 transition hover:bg-red-50"
+                {orders.length === 0 ? (
+                  <div className="py-10 text-center">
+                    <div className="text-3xl text-[#a99a8d]">▤</div>
+
+                    <p className="mt-3 text-sm font-medium text-[#2d261f]">
+                      Bạn chưa có đơn hàng nào
+                    </p>
+
+                    <p className="mt-2 text-xs leading-5 text-[#756b63]">
+                      Những đơn hàng đã đặt sẽ hiển thị tại đây.
+                    </p>
+
+                    <Link
+                      to="/products"
+                      className="mt-5 inline-flex bg-[#3b2f25] px-6 py-3 text-[10px] font-medium tracking-wide text-white transition hover:bg-[#594638]"
+                    >
+                      MUA SẮM NGAY
+                    </Link>
+                  </div>
+                ) : filteredOrders.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <div className="text-3xl text-[#a99a8d]">▤</div>
+
+                    <p className="mt-3 text-sm font-medium text-[#2d261f]">
+                      Không có đơn hàng ở trạng thái này
+                    </p>
+
+                    <p className="mt-2 text-xs leading-5 text-[#756b63]">
+                      Các đơn hàng thuộc trạng thái "{activeOrderStatus}" sẽ
+                      hiển thị tại đây.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-5 space-y-5">
+                    {filteredOrders.map((order) => (
+                      <article
+                        key={order.id}
+                        className="border border-[#e3dad2] p-4 md:p-5"
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#e9e1da] pb-3">
+                          <div className="min-w-0">
+                            <p className="text-[10px] text-[#756b63]">
+                              Mã đơn hàng
+                            </p>
+
+                            <p className="mt-1 break-all text-xs font-semibold text-[#2d261f]">
+                              {order.id}
+                            </p>
+
+                            <p className="mt-1 text-[10px] text-[#756b63]">
+                              {formatDate(order.createdAt)}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            <span
+                              className={`shrink-0 border px-2.5 py-1 text-[10px] ${getOrderStatusClass(order.status || "")}`}
                             >
-                              HỦY ĐƠN HÀNG
-                            </button>
-                          )}
+                              {getOrderStatusGroup(order.status || "")}
+                            </span>
+
+                            {canCancelOrder(order.status || "") && (
+                              <button
+                                type="button"
+                                onClick={() => handleCancelOrder(order.id)}
+                                className="border border-red-300 px-3 py-1.5 text-[10px] font-medium text-red-700 transition hover:bg-red-50"
+                              >
+                                HỦY ĐƠN HÀNG
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
 
-                      {/* THÔNG TIN NHẬN HÀNG */}
+                        {/* THÔNG TIN NHẬN HÀNG */}
 
-                      {order.customer && (
-                        <div className="border-b border-[#e9e1da] py-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-[#3b2f25]">
-                            Thông tin nhận hàng
-                          </p>
+                        {order.customer && (
+                          <div className="border-b border-[#e9e1da] py-3">
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#3b2f25]">
+                              Thông tin nhận hàng
+                            </p>
 
-                          <p className="mt-2 text-xs text-[#2d261f]">
-                            {order.customer.fullName}
-                          </p>
+                            <p className="mt-2 text-xs text-[#2d261f]">
+                              {order.customer.fullName}
+                            </p>
 
-                          <p className="mt-1 text-[10px] text-[#756b63]">
-                            {order.customer.phone}
-                            {order.customer.email
-                              ? ` · ${order.customer.email}`
-                              : ""}
-                          </p>
+                            <p className="mt-1 text-[10px] text-[#756b63]">
+                              {order.customer.phone}
+                              {order.customer.email
+                                ? ` · ${order.customer.email}`
+                                : ""}
+                            </p>
 
-                          <p className="mt-1 text-[10px] leading-5 text-[#756b63]">
-                            {[
-                              order.customer.address,
-                              order.customer.ward,
-                              order.customer.district,
-                              order.customer.city,
-                            ]
-                              .filter(Boolean)
-                              .join(", ")}
-                          </p>
-                        </div>
-                      )}
+                            <p className="mt-1 text-[10px] leading-5 text-[#756b63]">
+                              {[
+                                order.customer.address,
+                                order.customer.ward,
+                                order.customer.district,
+                                order.customer.city,
+                              ]
+                                .filter(Boolean)
+                                .join(", ")}
+                            </p>
+                          </div>
+                        )}
 
-                      {/* DANH SÁCH SẢN PHẨM */}
+                        {/* DANH SÁCH SẢN PHẨM */}
 
-                      <div className="divide-y divide-[#eee7e0]">
-                        {order.items.map((item, index) => {
-                          const product = getOrderItemProduct(item);
-                          const image = item.image || product?.images[0];
+                        <div className="divide-y divide-[#eee7e0]">
+                          {order.items.map((item, index) => {
+                            const product = getOrderItemProduct(item);
+                            const image = item.image || product?.images[0];
 
-                          return (
-                            <div
-                              key={`${item.productId}-${item.size ?? "default"}-${index}`}
-                              className="flex items-center gap-3 py-3"
-                            >
-                              {image ? (
-                                <img
-                                  src={image}
-                                  alt={item.name}
-                                  loading="lazy"
-                                  className="h-14 w-14 shrink-0 bg-[#f3eee9] object-cover"
-                                />
-                              ) : (
-                                <div className="flex h-14 w-14 shrink-0 items-center justify-center bg-[#f3eee9] text-[9px] text-[#756b63]">
-                                  NESTA
+                            return (
+                              <div
+                                key={`${item.productId}-${item.size ?? "default"}-${index}`}
+                                className="flex items-center gap-3 py-3"
+                              >
+                                {image ? (
+                                  <img
+                                    src={image}
+                                    alt={item.name}
+                                    loading="lazy"
+                                    className="h-14 w-14 shrink-0 bg-[#f3eee9] object-cover"
+                                  />
+                                ) : (
+                                  <div className="flex h-14 w-14 shrink-0 items-center justify-center bg-[#f3eee9] text-[9px] text-[#756b63]">
+                                    NESTA
+                                  </div>
+                                )}
+
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-medium text-[#2d261f]">
+                                    {item.name || product?.name || "Sản phẩm"}
+                                  </p>
+
+                                  <p className="mt-1 text-[10px] text-[#756b63]">
+                                    Số lượng: {item.quantity}
+                                    {item.size
+                                      ? ` · Kích thước: ${item.size}`
+                                      : ""}
+                                  </p>
+
+                                  <p className="mt-1 text-[10px] text-[#756b63]">
+                                    {formatPrice(item.price)} VNĐ / sản phẩm
+                                  </p>
                                 </div>
-                              )}
 
-                              <div className="min-w-0 flex-1">
-                                <p className="text-xs font-medium text-[#2d261f]">
-                                  {item.name || product?.name || "Sản phẩm"}
-                                </p>
-
-                                <p className="mt-1 text-[10px] text-[#756b63]">
-                                  Số lượng: {item.quantity}
-                                  {item.size
-                                    ? ` · Kích thước: ${item.size}`
-                                    : ""}
-                                </p>
-
-                                <p className="mt-1 text-[10px] text-[#756b63]">
-                                  {formatPrice(item.price)} VNĐ / sản phẩm
+                                <p className="shrink-0 text-right text-[10px] font-semibold text-[#3b2f25]">
+                                  {formatPrice(item.price * item.quantity)} VNĐ
                                 </p>
                               </div>
-
-                              <p className="shrink-0 text-right text-[10px] font-semibold text-[#3b2f25]">
-                                {formatPrice(item.price * item.quantity)} VNĐ
-                              </p>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* TỔNG TIỀN */}
-
-                      <div className="space-y-2 border-t border-[#e9e1da] pt-3">
-                        <div className="flex items-center justify-between gap-3 text-[11px]">
-                          <span className="text-[#756b63]">Tạm tính</span>
-                          <span className="text-[#3b2f25]">
-                            {formatPrice(order.subtotal)} VNĐ
-                          </span>
+                            );
+                          })}
                         </div>
 
-                        <div className="flex items-center justify-between gap-3 text-[11px]">
-                          <span className="text-[#756b63]">Phí vận chuyển</span>
-                          <span className="text-[#3b2f25]">
-                            {formatPrice(order.shipping)} VNĐ
-                          </span>
+                        {/* TỔNG TIỀN */}
+
+                        <div className="space-y-2 border-t border-[#e9e1da] pt-3">
+                          <div className="flex items-center justify-between gap-3 text-[11px]">
+                            <span className="text-[#756b63]">Tạm tính</span>
+                            <span className="text-[#3b2f25]">
+                              {formatPrice(order.subtotal)} VNĐ
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3 text-[11px]">
+                            <span className="text-[#756b63]">
+                              Phí vận chuyển
+                            </span>
+                            <span className="text-[#3b2f25]">
+                              {formatPrice(order.shipping)} VNĐ
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3 border-t border-[#e9e1da] pt-3">
+                            <span className="text-xs font-semibold text-[#2d261f]">
+                              Tổng đơn hàng
+                            </span>
+
+                            <span className="text-sm font-semibold text-[#3b2f25]">
+                              {formatPrice(order.total)} VNĐ
+                            </span>
+                          </div>
                         </div>
 
-                        <div className="flex items-center justify-between gap-3 border-t border-[#e9e1da] pt-3">
-                          <span className="text-xs font-semibold text-[#2d261f]">
-                            Tổng đơn hàng
-                          </span>
-
-                          <span className="text-sm font-semibold text-[#3b2f25]">
-                            {formatPrice(order.total)} VNĐ
-                          </span>
-                        </div>
-                      </div>
-
-                      <p className="mt-3 text-[10px] text-[#756b63]">
-                        Phương thức thanh toán:{" "}
-                        {order.paymentMethod === "cod"
-                          ? "Thanh toán khi nhận hàng"
-                          : order.paymentMethod === "bank"
-                            ? "Chuyển khoản ngân hàng"
-                            : "Chưa cập nhật"}
-                      </p>
-
-                      {order.customer?.note && (
-                        <p className="mt-2 text-[10px] leading-5 text-[#756b63]">
-                          Ghi chú: {order.customer.note}
+                        <p className="mt-3 text-[10px] text-[#756b63]">
+                          Phương thức thanh toán:{" "}
+                          {order.paymentMethod === "cod"
+                            ? "Thanh toán khi nhận hàng"
+                            : order.paymentMethod === "bank"
+                              ? "Chuyển khoản ngân hàng"
+                              : "Chưa cập nhật"}
                         </p>
-                      )}
-                    </article>
-                  ))}
-                </div>
-              )}
-            </section>
+
+                        {order.customer?.note && (
+                          <p className="mt-2 text-[10px] leading-5 text-[#756b63]">
+                            Ghi chú: {order.customer.note}
+                          </p>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
           </div>
         </div>
       </section>

@@ -1,4 +1,4 @@
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
 import { FeedbackProvider } from "./components/feedback/FeedbackProvider";
 
 import ScrollToTop from "./components/ScrollToTop";
@@ -11,12 +11,14 @@ import Cart from "./pages/Cart/Cart";
 import Checkout from "./pages/Checkout/Checkout";
 import Profile from "./pages/Profile/Profile";
 import About from "./pages/About/About";
+
 import RequireAdmin from "./components/auth/RequireAdmin";
 import AdminLayout from "./components/layout/AdminLayout";
-import AdminLogin from "./pages/Admin/Login";
+
 import Dashboard from "./pages/Admin/Dashboard";
 import UserLogin from "./pages/Auth/Login";
 import UserRegister from "./pages/Auth/Register";
+
 import AdminProducts from "./pages/Admin/AdminProducts";
 import AdminOrders from "./pages/Admin/AdminOrders";
 import AdminCustomers from "./pages/Admin/AdminCustomers";
@@ -29,13 +31,17 @@ function App() {
     <FeedbackProvider>
       <BrowserRouter basename="/Nesta">
         <ScrollToTop />
+
         <Routes>
-          {/* Tài khoản khách hàng */}
+          {/* Đăng nhập và đăng ký chung */}
           <Route path="/login" element={<UserLogin />} />
           <Route path="/register" element={<UserRegister />} />
 
-          {/* Tài khoản Admin */}
-          <Route path="/admin/login" element={<AdminLogin />} />
+          {/* Chuyển đường dẫn đăng nhập Admin cũ về trang chung */}
+          <Route
+            path="/admin/login"
+            element={<Navigate to="/login" replace />}
+          />
 
           {/* Khu vực quản trị được bảo vệ */}
           <Route element={<RequireAdmin />}>
@@ -50,7 +56,7 @@ function App() {
             </Route>
           </Route>
 
-          {/* Website khách hàng — giữ nguyên */}
+          {/* Website khách hàng */}
           <Route element={<MainLayout />}>
             <Route path="/" element={<Home />} />
             <Route path="/products" element={<Products />} />
